@@ -17,7 +17,21 @@
 struct ModelVertex
 {
     QVector3D position;
-    QVector3D color;
+    QVector3D displacement;
+    QVector3D Sig123;
+    QVector4D SigXYZS;
+};
+
+enum ZoneType
+{
+    W6, B8
+};
+
+struct Zone
+{
+    ZoneType type;
+    int num;
+    quint32 indices[8];
 };
 
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
@@ -39,10 +53,18 @@ protected:
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
+    void loadDataFiles();
+    void createRenderData();
+
     QVector<ModelVertex> modelVertices;
-    QOpenGLShaderProgram* lineShaderProgram;
-    QOpenGLVertexArrayObject modelVAO;
-    QOpenGLBuffer modeVBO;
+    QVector<Zone> zones;
+
+    QOpenGLBuffer modelVBO;
+    QOpenGLVertexArrayObject wireframeVAO;
+
+    QOpenGLShaderProgram* wireframeShaderProgram;
+    QVector<GLuint> wireframeIndices;
+    QOpenGLBuffer wireframeIBO;
 
     class Camera* camera;
     QTimer updateTimer;
