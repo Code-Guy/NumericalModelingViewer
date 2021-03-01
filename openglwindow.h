@@ -60,11 +60,16 @@ private:
     QVector<Zone> zones;
 
     QOpenGLBuffer modelVBO;
-    QOpenGLVertexArrayObject wireframeVAO;
 
+    QOpenGLVertexArrayObject wireframeVAO;
     QOpenGLShaderProgram* wireframeShaderProgram;
     QVector<GLuint> wireframeIndices;
     QOpenGLBuffer wireframeIBO;
+
+	QOpenGLVertexArrayObject zoneVAO;
+	QOpenGLShaderProgram* zoneShaderProgram;
+	QVector<GLuint> zoneIndices;
+	QOpenGLBuffer zoneIBO;
 
     class Camera* camera;
     QTimer updateTimer;

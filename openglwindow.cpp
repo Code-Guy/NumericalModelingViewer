@@ -13,9 +13,9 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
     createRenderData();
 
     // 初始化摄像机
-    //camera = new Camera(QVector3D(-30.0f, 72.0f, 72.0f), 308.0f, -30.0f, 20.0f, 0.1f);
+    camera = new Camera(QVector3D(-30.0f, 72.0f, 72.0f), 308.0f, -30.0f, 20.0f, 0.1f);
     //camera = new Camera(QVector3D(33.0f, 5.0f, 17.0f), 63.0f, -27.0f, 20.0f, 0.1f);
-    camera = new Camera(QVector3D(0.04f, 2.88f, 2.1f), 301.0f, -62.0f, 20.0f, 0.1f);
+    //camera = new Camera(QVector3D(0.04f, 2.88f, 2.1f), 301.0f, -62.0f, 20.0f, 0.1f);
     camera->setFovy(60.0f);
     camera->setClipping(0.1f, 1000.0f);
 }
@@ -43,47 +43,78 @@ void OpenGLWindow::initializeGL()
     glCullFace(GL_BACK);
     glEnable(GL_CULL_FACE);
 
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+
     glEnable(GL_LINE_SMOOTH);
 	GLint range[2];
 	glGetIntegerv(GL_SMOOTH_LINE_WIDTH_RANGE, range);
     glLineWidth(range[1]);
 
-    // create the shader program
-    wireframeShaderProgram = new QOpenGLShaderProgram;
-    bool success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
-    success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/wireframe_fs.glsl");
+	// create the vertex buffer object
+	modelVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+	modelVBO.create();
+	modelVBO.bind();
+	modelVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+	modelVBO.allocate(modelVertices.constData(), modelVertices.count() * sizeof(ModelVertex));
 
-    wireframeShaderProgram->link();
-    wireframeShaderProgram->bind();
+    // 创建线框模式相关渲染资源
+    {
+		// create the shader program
+		wireframeShaderProgram = new QOpenGLShaderProgram;
+		bool success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
+		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/wireframe_fs.glsl");
+		wireframeShaderProgram->link();
 
-    // create the vertex array object
-    wireframeVAO.create();
-    wireframeVAO.bind();
+		// create the vertex array object
+		wireframeVAO.create();
+		wireframeVAO.bind();
+		modelVBO.bind();
 
-    // create the vertex buffer object
-    modelVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-    modelVBO.create();
-    modelVBO.bind();
-    modelVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-    modelVBO.allocate(modelVertices.constData(), modelVertices.count() * sizeof(ModelVertex));
+		// create the index buffer object
+		wireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		wireframeIBO.create();
+		wireframeIBO.bind();
+		wireframeIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		wireframeIBO.allocate(wireframeIndices.constData(), wireframeIndices.count() * sizeof(GLuint));
 
-    // create the index buffer object
-    wireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-    wireframeIBO.create();
-    wireframeIBO.bind();
-    wireframeIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-    wireframeIBO.allocate(wireframeIndices.constData(), wireframeIndices.count() * sizeof(GLuint));
+		// connect the inputs to the shader program
+		wireframeShaderProgram->bind();
+		wireframeShaderProgram->enableAttributeArray(0);
+		wireframeShaderProgram->enableAttributeArray(1);
+		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(ModelVertex));
+		wireframeShaderProgram->setAttributeBuffer(1, GL_FLOAT, 3 * sizeof(GLfloat), 3, sizeof(ModelVertex));
+    }
+    
+    // 创建单元模式相关渲染资源
+    {
+        zoneShaderProgram = new QOpenGLShaderProgram;
+        bool success = zoneShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/zone_vs.glsl");
+        Q_ASSERT_X(success, "zoneShaderProgram", qPrintable(zoneShaderProgram->log()));
 
-    // connect the inputs to the shader program
-    wireframeShaderProgram->enableAttributeArray(0);
-    wireframeShaderProgram->enableAttributeArray(1);
-    wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(ModelVertex));
-    wireframeShaderProgram->setAttributeBuffer(1, GL_FLOAT, 3 * sizeof(GLfloat), 3, sizeof(ModelVertex));
+        success = zoneShaderProgram->addShaderFromSourceFile(QOpenGLShader::Geometry, "asset/shader/zone_gs.glsl");
+        Q_ASSERT_X(success, "zoneShaderProgram", qPrintable(zoneShaderProgram->log()));
 
-    wireframeVAO.release();
-    modelVBO.release();
-    wireframeIBO.release();
-	wireframeShaderProgram->release();
+        success = zoneShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/zone_fs.glsl");
+        Q_ASSERT_X(success, "zoneShaderProgram", qPrintable(zoneShaderProgram->log()));
+        zoneShaderProgram->link();
+
+		zoneVAO.create();
+		zoneVAO.bind();
+		modelVBO.bind();
+
+		// create the index buffer object
+		zoneIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		zoneIBO.create();
+		zoneIBO.bind();
+		zoneIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(GLuint));
+
+		// connect the inputs to the shader program
+		zoneShaderProgram->bind();
+		zoneShaderProgram->enableAttributeArray(0);
+		zoneShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(ModelVertex));
+    }
 
     // 初始化计时器
     elapsedTimer.start();
@@ -105,19 +136,35 @@ void OpenGLWindow::paintGL()
     // 更新摄像机
     camera->tick(deltaTime);
 
-    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glClearColor(0.7, 0.7, 0.7, 1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+   
+    QMatrix4x4 m;
+    QMatrix4x4 v = camera->getViewMatrix();
+    QMatrix4x4 mv = v * m;
+    QMatrix4x4 mvp = camera->getPerspectiveMatrix() * mv;
 
-    wireframeShaderProgram->bind();
-    QMatrix4x4 m = camera->getViewPerspectiveMatrix();
-    wireframeShaderProgram->setUniformValue("mvp", m);
+    //wireframeShaderProgram->bind();
+    //wireframeShaderProgram->setUniformValue("mvp", mvp);
 
-    wireframeVAO.bind();
-    //glDrawElements(GL_TRIANGLES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
-    glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+    //wireframeVAO.bind();
+    //glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-    wireframeVAO.release();
-    wireframeShaderProgram->release();
+    zoneShaderProgram->bind();
+    zoneShaderProgram->setUniformValue("mvp", mvp);
+    zoneShaderProgram->setUniformValue("mv", mv);
+	float halfWidth = width() * 0.5f;
+	float halfHeight = height() / 2.0f;
+	QMatrix4x4 viewport = viewport = QMatrix4x4(halfWidth, 0.0f, 0.0f, 0.0f,
+		0.0f, halfHeight, 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		halfWidth + 0, halfHeight + 0, 0.0f, 1.0f);
+    zoneShaderProgram->setUniformValue("viewport", viewport);
+    zoneShaderProgram->setUniformValue("LineWidth", 0.5f);
+    zoneShaderProgram->setUniformValue("LineColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
+
+    zoneVAO.bind();
+    glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -251,6 +298,7 @@ void OpenGLWindow::createRenderData()
 {
     for (const Zone& zone : zones)
     {
+        //const Zone& zone = zones[15300];
         if (zone.num == 8)
         {
             wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
@@ -258,6 +306,20 @@ void OpenGLWindow::createRenderData()
                 zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2], 
                 zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6], 
                 zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
+
+            zoneIndices.append({ zone.indices[0], zone.indices[2], zone.indices[1],
+                zone.indices[2], zone.indices[4], zone.indices[1],
+                zone.indices[0], zone.indices[3], zone.indices[2],
+                zone.indices[3], zone.indices[5], zone.indices[2],
+                zone.indices[0], zone.indices[1], zone.indices[3],
+                zone.indices[1], zone.indices[6], zone.indices[3],
+                zone.indices[2], zone.indices[5], zone.indices[4],
+                zone.indices[5], zone.indices[7], zone.indices[4],
+                zone.indices[1], zone.indices[4], zone.indices[7],
+                zone.indices[1], zone.indices[7], zone.indices[6],
+                zone.indices[3], zone.indices[7], zone.indices[5],
+                zone.indices[3], zone.indices[6], zone.indices[7]
+                });
         }
         else if (zone.num == 6)
         {
@@ -265,6 +327,16 @@ void OpenGLWindow::createRenderData()
                 zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
                 zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
                 zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
+
+			zoneIndices.append({ zone.indices[2], zone.indices[5], zone.indices[4],
+				zone.indices[0], zone.indices[1], zone.indices[3],
+				zone.indices[1], zone.indices[4], zone.indices[3],
+				zone.indices[3], zone.indices[4], zone.indices[5],
+				zone.indices[0], zone.indices[3], zone.indices[5],
+				zone.indices[0], zone.indices[5], zone.indices[2],
+				zone.indices[0], zone.indices[2], zone.indices[4],
+				zone.indices[0], zone.indices[4], zone.indices[1]
+				});
         }
     }
 }
