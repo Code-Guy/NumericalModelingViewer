@@ -6,13 +6,12 @@ layout( triangle_strip, max_vertices = 3 ) out;
 in vec3 VPosition[];
 
 out vec3 GPosition;
-noperspective out vec3 GEdgeDistance;
+noperspective out vec4 GEdgeDistance;
 
 uniform mat4 viewport;
 
 void main()
 {
-
 	// Transform each vertex into viewport space
 	vec3 p0 = vec3(viewport * (gl_in[0].gl_Position / gl_in[0].gl_Position.w));
 	vec3 p1 = vec3(viewport * (gl_in[1].gl_Position / gl_in[1].gl_Position.w));
@@ -28,16 +27,37 @@ void main()
 	float hb = abs( c * sin( alpha ) );
 	float hc = abs( b * sin( alpha ) );
 
+	p0 = VPosition[0];
+	p1 = VPosition[1];
+	p2 = VPosition[2];
+	a = length(p1 - p2);
+	b = length(p2 - p0);
+	c = length(p1 - p0);
+
+	int i;
+	if (a > b && a > c)
+	{
+		i = 0;
+	}
+	else if (b > a && b > c)
+	{
+		i = 1;
+	}
+	else
+	{
+		i= 2;
+	}
+
 	// Send the triangle along with the edge distances
-	GEdgeDistance = vec3( ha, 0, 0 );
+	GEdgeDistance = vec4( ha, 0, 0, i );
 	gl_Position = gl_in[0].gl_Position;
 	EmitVertex();
 
-	GEdgeDistance = vec3( 0, hb, 0 );
+	GEdgeDistance = vec4( 0, hb, 0, i );
 	gl_Position = gl_in[1].gl_Position;
 	EmitVertex();
 
-	GEdgeDistance = vec3( 0, 0, hc );
+	GEdgeDistance = vec4( 0, 0, hc, i );
 	gl_Position = gl_in[2].gl_Position;
 	EmitVertex();
 	
