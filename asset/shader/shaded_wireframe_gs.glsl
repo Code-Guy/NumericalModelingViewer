@@ -27,26 +27,26 @@ void main()
 	float hb = abs( c * sin( alpha ) );
 	float hc = abs( b * sin( alpha ) );
 
-	p0 = VPosition[0];
-	p1 = VPosition[1];
-	p2 = VPosition[2];
-	a = length(p1 - p2);
-	b = length(p2 - p0);
-	c = length(p1 - p0);
-
-	int i;
-	if (a > b && a > c)
-	{
-		i = 0;
-	}
-	else if (b > a && b > c)
-	{
-		i = 1;
-	}
-	else
-	{
-		i= 2;
-	}
+	int i = 0;
+	// p0 = VPosition[0];
+	// p1 = VPosition[1];
+	// p2 = VPosition[2];
+	// a = length(p1 - p2);
+	// b = length(p2 - p0);
+	// c = length(p1 - p0);
+	
+	// if (a > b && a > c)
+	// {
+	// 	i = 0;
+	// }
+	// else if (b > a && b > c)
+	// {
+	// 	i = 1;
+	// }
+	// else
+	// {
+	// 	i = 2;
+	// }
 
 	// Send the triangle along with the edge distances
 	GEdgeDistance = vec4( ha, 0, 0, i );

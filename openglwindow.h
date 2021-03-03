@@ -27,11 +27,23 @@ enum ZoneType
     W6, B8
 };
 
+enum FaceType
+{
+	Q4, T3
+};
+
 struct Zone
 {
     ZoneType type;
     int num;
     quint32 indices[8];
+};
+
+struct Face
+{
+	FaceType type;
+	int num;
+	quint32 indices[4];
 };
 
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
@@ -58,18 +70,24 @@ private:
 
     QVector<ModelVertex> modelVertices;
     QVector<Zone> zones;
+    QVector<Face> faces;
+
+    QOpenGLShaderProgram* wireframeShaderProgram;
+    QOpenGLShaderProgram* shadedWireframeShaderProgram;
 
     QOpenGLBuffer modelVBO;
 
     QOpenGLVertexArrayObject wireframeVAO;
-    QOpenGLShaderProgram* wireframeShaderProgram;
     QVector<GLuint> wireframeIndices;
     QOpenGLBuffer wireframeIBO;
 
 	QOpenGLVertexArrayObject zoneVAO;
-	QOpenGLShaderProgram* zoneShaderProgram;
 	QVector<GLuint> zoneIndices;
 	QOpenGLBuffer zoneIBO;
+
+	QOpenGLVertexArrayObject faceVAO;
+	QVector<GLuint> faceIndices;
+	QOpenGLBuffer faceIBO;
 
     class Camera* camera;
     QTimer updateTimer;
