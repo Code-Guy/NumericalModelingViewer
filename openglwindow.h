@@ -14,7 +14,7 @@
 #include <QElapsedTimer>
 #include <QTimer>
 
-struct ModelVertex
+struct Vertex
 {
     QVector3D position;
     QVector3D displacement;
@@ -66,11 +66,14 @@ protected:
 
 private:
     void loadDataFiles();
+    bool loadDatabase();
     void createRenderData();
 
-    QVector<ModelVertex> modelVertices;
+    QVector<Vertex> vertices;
     QVector<Zone> zones;
     QVector<Face> faces;
+
+    QVector<int> zoneTypes;
 
     QOpenGLShaderProgram* wireframeShaderProgram;
     QOpenGLShaderProgram* shadedWireframeShaderProgram;

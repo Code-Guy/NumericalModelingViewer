@@ -2,6 +2,10 @@
 #include "camera.h"
 #include <QDebug>
 #include <QFile>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlRecord>
+#include <QMessageBox>
 
 OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent) 
 {
@@ -9,15 +13,19 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
     setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
     // 加载数据
-    loadDataFiles();
+    //loadDataFiles();
+	loadDatabase();
+
+	// 创建渲染所需要的数据
     createRenderData();
 
     // 初始化摄像机
-    camera = new Camera(QVector3D(-30.0f, 72.0f, 72.0f), 308.0f, -30.0f, 20.0f, 0.1f);
-    //camera = new Camera(QVector3D(33.0f, 5.0f, 17.0f), 63.0f, -27.0f, 20.0f, 0.1f);
-    //camera = new Camera(QVector3D(0.04f, 2.88f, 2.1f), 301.0f, -62.0f, 20.0f, 0.1f);
-    camera->setFovy(60.0f);
-    camera->setClipping(0.1f, 1000.0f);
+	/*camera = new Camera(QVector3D(-30.0f, 72.0f, 72.0f), 308.0f, -30.0f, 20.0f, 0.1f);
+	camera->setClipping(0.1f, 1000.0f);*/
+
+	camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
+	camera->setClipping(0.1f, 10000.0f);
+	camera->setFovy(60.0f);
 }
 
 OpenGLWindow::~OpenGLWindow()
@@ -47,7 +55,7 @@ void OpenGLWindow::initializeGL()
     // 设置OGL状态
     glFrontFace(GL_CCW);
     glCullFace(GL_BACK);
-    glEnable(GL_CULL_FACE);
+    //glEnable(GL_CULL_FACE);
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -84,7 +92,7 @@ void OpenGLWindow::initializeGL()
 	modelVBO.create();
 	modelVBO.bind();
 	modelVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-	modelVBO.allocate(modelVertices.constData(), modelVertices.count() * sizeof(ModelVertex));
+	modelVBO.allocate(vertices.constData(), vertices.count() * sizeof(Vertex));
 
     // 创建线框模式相关渲染资源
     {
@@ -103,9 +111,7 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		wireframeShaderProgram->bind();
 		wireframeShaderProgram->enableAttributeArray(0);
-		wireframeShaderProgram->enableAttributeArray(1);
-		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(ModelVertex));
-		wireframeShaderProgram->setAttributeBuffer(1, GL_FLOAT, 3 * sizeof(GLfloat), 3, sizeof(ModelVertex));
+		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(Vertex));
     }
     
     // 创建单元模式相关渲染资源
@@ -124,7 +130,7 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
 		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(ModelVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(Vertex));
     }
 
 	// 创建Face相关渲染资源
@@ -143,7 +149,7 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
 		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(ModelVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(Vertex));
 	}
 
     // 初始化计时器
@@ -174,30 +180,30 @@ void OpenGLWindow::paintGL()
     QMatrix4x4 mv = v * m;
     QMatrix4x4 mvp = camera->getPerspectiveMatrix() * mv;
 
-    //wireframeShaderProgram->bind();
-    //wireframeShaderProgram->setUniformValue("mvp", mvp);
+    wireframeShaderProgram->bind();
+    wireframeShaderProgram->setUniformValue("mvp", mvp);
 
-    //wireframeVAO.bind();
-    //glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+    wireframeVAO.bind();
+    glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-    shadedWireframeShaderProgram->bind();
-    shadedWireframeShaderProgram->setUniformValue("mvp", mvp);
-    shadedWireframeShaderProgram->setUniformValue("mv", mv);
-	float halfWidth = width() * 0.5f;
-	float halfHeight = height() / 2.0f;
-	QMatrix4x4 viewport = viewport = QMatrix4x4(halfWidth, 0.0f, 0.0f, 0.0f,
-		0.0f, halfHeight, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		halfWidth + 0, halfHeight + 0, 0.0f, 1.0f);
-    shadedWireframeShaderProgram->setUniformValue("viewport", viewport);
-    shadedWireframeShaderProgram->setUniformValue("LineWidth", 0.5f);
-    shadedWireframeShaderProgram->setUniformValue("LineColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
+ //   shadedWireframeShaderProgram->bind();
+ //   shadedWireframeShaderProgram->setUniformValue("mvp", mvp);
+ //   shadedWireframeShaderProgram->setUniformValue("mv", mv);
+	//float halfWidth = width() * 0.5f;
+	//float halfHeight = height() / 2.0f;
+	//QMatrix4x4 viewport = viewport = QMatrix4x4(halfWidth, 0.0f, 0.0f, 0.0f,
+	//	0.0f, halfHeight, 0.0f, 0.0f,
+	//	0.0f, 0.0f, 1.0f, 0.0f,
+	//	halfWidth + 0, halfHeight + 0, 0.0f, 1.0f);
+ //   shadedWireframeShaderProgram->setUniformValue("viewport", viewport);
+ //   shadedWireframeShaderProgram->setUniformValue("LineWidth", 0.5f);
+ //   shadedWireframeShaderProgram->setUniformValue("LineColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
 
-    //zoneVAO.bind();
-    //glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+ //   //zoneVAO.bind();
+ //   //glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	faceVAO.bind();
-	glDrawElements(GL_TRIANGLES, faceIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//faceVAO.bind();
+	//glDrawElements(GL_TRIANGLES, faceIndices.count(), GL_UNSIGNED_INT, nullptr);
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -239,10 +245,10 @@ void OpenGLWindow::loadDataFiles()
             if (header == "G")
             {
 				int index;
-				ModelVertex vertex;
+				Vertex vertex;
 				in >> index >> vertex.position[0] >> vertex.position[1] >> vertex.position[2];
 
-				modelVertices.append(vertex);
+				vertices.append(vertex);
             }
             else if (header == "Z")
             {
@@ -323,9 +329,9 @@ void OpenGLWindow::loadDataFiles()
             in >> index;
             index -= 1;
 
-            in >> modelVertices[index].displacement[0] >>
-                modelVertices[index].displacement[1] >>
-                modelVertices[index].displacement[2];
+            in >> vertices[index].displacement[0] >>
+                vertices[index].displacement[1] >>
+                vertices[index].displacement[2];
             in.readLine();
         }
 
@@ -344,13 +350,13 @@ void OpenGLWindow::loadDataFiles()
 			in >> index;
 			index -= 1;
 
-			in >> modelVertices[index].Sig123[0] >>
-				modelVertices[index].Sig123[1] >>
-				modelVertices[index].Sig123[2] >>
-				modelVertices[index].SigXYZS[0] >>
-				modelVertices[index].SigXYZS[1] >>
-				modelVertices[index].SigXYZS[2] >>
-				modelVertices[index].SigXYZS[3];
+			in >> vertices[index].Sig123[0] >>
+				vertices[index].Sig123[1] >>
+				vertices[index].Sig123[2] >>
+				vertices[index].SigXYZS[0] >>
+				vertices[index].SigXYZS[1] >>
+				vertices[index].SigXYZS[2] >>
+				vertices[index].SigXYZS[3];
 			in.readLine();
 		}
 
@@ -358,65 +364,192 @@ void OpenGLWindow::loadDataFiles()
 	}
 }
 
+bool OpenGLWindow::loadDatabase()
+{
+	QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+	db.setDatabaseName("asset/data/Hydro.edb");
+	if (!db.open()) {
+		QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
+			QObject::tr("Unable to establish a database connection.\n"
+				"This example needs SQLite support. Please read "
+				"the Qt SQL driver documentation for information how "
+				"to build it.\n\n"
+				"Click Cancel to exit."), QMessageBox::Cancel);
+		return false;
+	}
+
+	// 查询网格单元类型信息
+	QSqlQuery query("SELECT * FROM ELETYPE");
+	QSqlRecord record = query.record();
+	while (query.next()) 
+	{
+		int zoneType = query.value(0).toInt();
+		zoneTypes.append(zoneType);
+	}
+
+	// 查询网格单元节点索引
+	query.exec("SELECT * FROM ELEMENTS");
+	record = query.record();
+	while (query.next()) 
+	{
+		Zone zone;
+		zone.type = (ZoneType)query.value(1).toInt();
+		zone.num = query.value(2).toInt();
+		for (int i = 0; i < zone.num; ++i)
+		{
+			zone.indices[i] = query.value(i + 3).toInt() - 1;
+		}
+		
+		zones.append(zone);
+	}
+
+	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
+	query.exec("SELECT * FROM ELEMEDGES");
+	record = query.record();
+	while (query.next())
+	{
+		int num = query.value(2).toInt() * 2;
+		for (int i = 0; i < num; ++i)
+		{
+			wireframeIndices.append(query.value(i + 3).toInt() - 1);
+		}
+	}
+
+	// 查询节点索引及空间坐标
+	query.exec("SELECT * FROM NODES");
+	record = query.record();
+	while (query.next())
+	{
+		Vertex vertex;
+		for (int i = 0; i < 3; ++i)
+		{
+			vertex.position[i] = query.value(i + 1).toFloat();
+		}
+
+		vertices.append(vertex);
+	}
+
+	// 查询模型所有表面对应的节点索引信息
+	//query.exec("SELECT * FROM FACETS");
+	//record = query.record();
+	//while (query.next())
+	//{
+	//	Face face;
+	//	face.num = query.value(2).toInt();
+	//	for (int i = 0; i < face.num; ++i)
+	//	{
+	//		face.indices[i] = query.value(i + 3).toInt() - 1;
+	//	}
+
+	//	faces.append(face);
+	//}
+
+	// 查询模型所有外表面对应的节点索引信息
+	//query.exec("SELECT * FROM EXTERIOR");
+	//record = query.record();
+	//while (query.next())
+	//{
+	//	Face face;
+	//	face.num = query.value(3).toInt();
+	//	for (int i = 0; i < face.num; ++i)
+	//	{
+	//		face.indices[i] = query.value(i + 4).toInt() - 1;
+	//	}
+
+	//	faces.append(face);
+	//}
+
+	// 查询每个节点对应的计算结果值
+	//query.exec("SELECT * FROM RESULTS");
+	//record = query.record();
+	//while (query.next())
+	//{
+	//	QString str;
+	//	for (int i = 0; i < record.count(); ++i)
+	//	{
+	//		str += query.value(i).toString() + "-";
+	//	}
+
+	//	qDebug() << str;
+	//}
+
+	// 查询计算结果类型、名称
+	query.exec("SELECT * FROM RSTTYPE");
+	record = query.record();
+	while (query.next())
+	{
+		QString str;
+		for (int i = 0; i < record.count(); ++i)
+		{
+			str += query.value(i).toString() + "-";
+		}
+
+		qDebug() << str;
+	}
+
+	return true;
+}
+
 void OpenGLWindow::createRenderData()
 {
-    for (const Zone& zone : zones)
-    {
-        //const Zone& zone = zones[15300];
-        if (zone.num == 8)
-        {
-            wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-                zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[2], zone.indices[4], 
-                zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2], 
-                zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6], 
-                zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
+   // for (const Zone& zone : zones)
+   // {
+   //     //const Zone& zone = zones[15300];
+   //     if (zone.num == 8)
+   //     {
+   //         wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
+   //             zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[2], zone.indices[4], 
+   //             zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2], 
+   //             zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6], 
+   //             zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
 
-            zoneIndices.append({ zone.indices[0], zone.indices[2], zone.indices[1],
-                zone.indices[2], zone.indices[4], zone.indices[1],
-                zone.indices[0], zone.indices[3], zone.indices[2],
-                zone.indices[3], zone.indices[5], zone.indices[2],
-                zone.indices[0], zone.indices[1], zone.indices[3],
-                zone.indices[1], zone.indices[6], zone.indices[3],
-                zone.indices[2], zone.indices[5], zone.indices[4],
-                zone.indices[5], zone.indices[7], zone.indices[4],
-                zone.indices[1], zone.indices[4], zone.indices[7],
-                zone.indices[1], zone.indices[7], zone.indices[6],
-                zone.indices[3], zone.indices[7], zone.indices[5],
-                zone.indices[3], zone.indices[6], zone.indices[7]
-                });
-        }
-        else if (zone.num == 6)
-        {
-            wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-                zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
-                zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
-                zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
+   //         zoneIndices.append({ zone.indices[0], zone.indices[2], zone.indices[1],
+   //             zone.indices[2], zone.indices[4], zone.indices[1],
+   //             zone.indices[0], zone.indices[3], zone.indices[2],
+   //             zone.indices[3], zone.indices[5], zone.indices[2],
+   //             zone.indices[0], zone.indices[1], zone.indices[3],
+   //             zone.indices[1], zone.indices[6], zone.indices[3],
+   //             zone.indices[2], zone.indices[5], zone.indices[4],
+   //             zone.indices[5], zone.indices[7], zone.indices[4],
+   //             zone.indices[1], zone.indices[4], zone.indices[7],
+   //             zone.indices[1], zone.indices[7], zone.indices[6],
+   //             zone.indices[3], zone.indices[7], zone.indices[5],
+   //             zone.indices[3], zone.indices[6], zone.indices[7]
+   //             });
+   //     }
+   //     else if (zone.num == 6)
+   //     {
+   //         wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
+   //             zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
+   //             zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
+   //             zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
 
-			zoneIndices.append({ zone.indices[2], zone.indices[5], zone.indices[4],
-				zone.indices[0], zone.indices[1], zone.indices[3],
-				zone.indices[1], zone.indices[4], zone.indices[3],
-				zone.indices[3], zone.indices[4], zone.indices[5],
-				zone.indices[0], zone.indices[3], zone.indices[5],
-				zone.indices[0], zone.indices[5], zone.indices[2],
-				zone.indices[0], zone.indices[2], zone.indices[4],
-				zone.indices[0], zone.indices[4], zone.indices[1]
-				});
-        }
-    }
+			//zoneIndices.append({ zone.indices[2], zone.indices[5], zone.indices[4],
+			//	zone.indices[0], zone.indices[1], zone.indices[3],
+			//	zone.indices[1], zone.indices[4], zone.indices[3],
+			//	zone.indices[3], zone.indices[4], zone.indices[5],
+			//	zone.indices[0], zone.indices[3], zone.indices[5],
+			//	zone.indices[0], zone.indices[5], zone.indices[2],
+			//	zone.indices[0], zone.indices[2], zone.indices[4],
+			//	zone.indices[0], zone.indices[4], zone.indices[1]
+			//	});
+   //     }
+   // }
 
 	for (const Face& face : faces)
 	{
+		//const Face& face = faces[i];
 		if (face.num == 3)
 		{
 			faceIndices.append({
-				face.indices[0], face.indices[2], face.indices[1]
+				face.indices[0], face.indices[1], face.indices[2]
 				});
 		}
 		else if (face.num == 4)
 		{
 			faceIndices.append({
-				face.indices[0], face.indices[3], face.indices[2],
-				face.indices[0], face.indices[2], face.indices[1]
+				face.indices[0], face.indices[2], face.indices[1],
+				face.indices[0], face.indices[3], face.indices[2]
 				});
 		}
 	}
