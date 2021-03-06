@@ -14,12 +14,60 @@
 #include <QElapsedTimer>
 #include <QTimer>
 
+//struct Vertex
+//{
+//    QVector3D position;
+//    QVector3D displacement;
+//    QVector3D Sig123;
+//    QVector4D SigXYZS;
+//};
+
 struct Vertex
 {
-    QVector3D position;
-    QVector3D displacement;
-    QVector3D Sig123;
-    QVector4D SigXYZS;
+	QVector3D position;
+    float totalDeformation;
+	QVector3D deformation;
+	QVector3D normalElasticStrain;
+	QVector3D shearElasticStrain;
+    float maximumPrincipalStress;
+    float middlePrincipalStress;
+    float minimumPrincipalStress;
+    QVector3D normalStress;
+    QVector3D shearStress;
+};
+
+const float kMaxVal = 1e8f;
+const float kMinVal = -kMaxVal;
+const QVector3D kMaxVec3 = QVector3D(kMaxVal, kMaxVal, kMaxVal);
+const QVector3D kMinVec3 = QVector3D(kMinVal, kMinVal, kMinVal);
+struct ValueRange
+{
+	float minTotalDeformation = kMaxVal;
+	float maxTotalDeformation = kMinVal;
+
+	QVector3D minDeformation = kMaxVec3;
+	QVector3D maxDeformation = kMinVec3;
+
+	QVector3D minNormalElasticStrain = kMaxVec3;
+	QVector3D maxNormalElasticStrain = kMinVec3;
+
+	QVector3D minShearElasticStrain = kMaxVec3;
+	QVector3D maxShearElasticStrain = kMinVec3;
+
+	float minMaximumPrincipalStress = kMaxVal;
+	float maxMaximumPrincipalStress = kMinVal;
+
+	float minMiddlePrincipalStress = kMaxVal;
+	float maxMiddlePrincipalStress = kMinVal;
+
+	float minMinimumPrincipalStress = kMaxVal;
+	float maxMinimumPrincipalStress = kMinVal;
+
+	QVector3D minNormalStress = kMaxVec3;
+	QVector3D maxNormalStress = kMinVec3;
+
+	QVector3D minShearStress = kMaxVec3;
+	QVector3D maxShearStress = kMinVec3;
 };
 
 enum ZoneType
@@ -65,15 +113,17 @@ protected:
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
-    void loadDataFiles();
+    //void loadDataFiles();
     bool loadDatabase();
     void createRenderData();
+    QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs);
+    QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs);
 
     QVector<Vertex> vertices;
     QVector<Zone> zones;
     QVector<Face> faces;
-
-    QVector<int> zoneTypes;
+    ValueRange valueRange;
+	QVector<int> zoneTypes;
 
     QOpenGLShaderProgram* wireframeShaderProgram;
     QOpenGLShaderProgram* shadedWireframeShaderProgram;

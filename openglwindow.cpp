@@ -149,7 +149,56 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
 		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->enableAttributeArray(1);
+		shadedWireframeShaderProgram->enableAttributeArray(2);
+		shadedWireframeShaderProgram->enableAttributeArray(3);
+		shadedWireframeShaderProgram->enableAttributeArray(4);
+		shadedWireframeShaderProgram->enableAttributeArray(5);
+		shadedWireframeShaderProgram->enableAttributeArray(6);
+		shadedWireframeShaderProgram->enableAttributeArray(7);
+		shadedWireframeShaderProgram->enableAttributeArray(8);
+		shadedWireframeShaderProgram->enableAttributeArray(9);
+
+		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(Vertex, totalDeformation), 1, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(2, GL_FLOAT, offsetof(Vertex, deformation), 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(3, GL_FLOAT, offsetof(Vertex, normalElasticStrain), 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(4, GL_FLOAT, offsetof(Vertex, shearElasticStrain), 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(5, GL_FLOAT, offsetof(Vertex, maximumPrincipalStress), 1, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(6, GL_FLOAT, offsetof(Vertex, middlePrincipalStress), 1, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(7, GL_FLOAT, offsetof(Vertex, minimumPrincipalStress), 1, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(Vertex, normalStress), 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(Vertex, shearStress), 3, sizeof(Vertex));
+
+		shadedWireframeShaderProgram->setUniformValue("lineWidth", 0.5f);
+		shadedWireframeShaderProgram->setUniformValue("lineColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
+
+		shadedWireframeShaderProgram->setUniformValue("minTotalDeformation", valueRange.minTotalDeformation);
+		shadedWireframeShaderProgram->setUniformValue("maxTotalDeformation", valueRange.maxTotalDeformation);
+
+		shadedWireframeShaderProgram->setUniformValue("minDeformation", valueRange.minDeformation);
+		shadedWireframeShaderProgram->setUniformValue("maxDeformation", valueRange.maxDeformation);
+
+		shadedWireframeShaderProgram->setUniformValue("minNormalElasticStrain", valueRange.minNormalElasticStrain);
+		shadedWireframeShaderProgram->setUniformValue("maxNormalElasticStrain", valueRange.maxNormalElasticStrain);
+
+		shadedWireframeShaderProgram->setUniformValue("minShearElasticStrain", valueRange.minShearElasticStrain);
+		shadedWireframeShaderProgram->setUniformValue("maxShearElasticStrain", valueRange.maxShearElasticStrain);
+
+		shadedWireframeShaderProgram->setUniformValue("minMaximumPrincipalStress", valueRange.minMaximumPrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("maxMaximumPrincipalStress", valueRange.maxMaximumPrincipalStress);
+
+		shadedWireframeShaderProgram->setUniformValue("minMiddlePrincipalStress", valueRange.minMiddlePrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("maxMiddlePrincipalStress", valueRange.maxMiddlePrincipalStress);
+
+		shadedWireframeShaderProgram->setUniformValue("minMinimumPrincipalStress", valueRange.minMinimumPrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("maxMinimumPrincipalStress", valueRange.maxMinimumPrincipalStress);
+
+		shadedWireframeShaderProgram->setUniformValue("minNormalStress", valueRange.minNormalStress);
+		shadedWireframeShaderProgram->setUniformValue("maxNormalStress", valueRange.maxNormalStress);
+
+		shadedWireframeShaderProgram->setUniformValue("minShearStress", valueRange.minShearStress);
+		shadedWireframeShaderProgram->setUniformValue("maxShearStress", valueRange.maxShearStress);
 	}
 
     // 初始化计时器
@@ -180,30 +229,28 @@ void OpenGLWindow::paintGL()
     QMatrix4x4 mv = v * m;
     QMatrix4x4 mvp = camera->getPerspectiveMatrix() * mv;
 
-    wireframeShaderProgram->bind();
-    wireframeShaderProgram->setUniformValue("mvp", mvp);
+    //wireframeShaderProgram->bind();
+    //wireframeShaderProgram->setUniformValue("mvp", mvp);
 
-    wireframeVAO.bind();
-    glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+    //wireframeVAO.bind();
+    //glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
- //   shadedWireframeShaderProgram->bind();
- //   shadedWireframeShaderProgram->setUniformValue("mvp", mvp);
- //   shadedWireframeShaderProgram->setUniformValue("mv", mv);
-	//float halfWidth = width() * 0.5f;
-	//float halfHeight = height() / 2.0f;
-	//QMatrix4x4 viewport = viewport = QMatrix4x4(halfWidth, 0.0f, 0.0f, 0.0f,
-	//	0.0f, halfHeight, 0.0f, 0.0f,
-	//	0.0f, 0.0f, 1.0f, 0.0f,
-	//	halfWidth + 0, halfHeight + 0, 0.0f, 1.0f);
- //   shadedWireframeShaderProgram->setUniformValue("viewport", viewport);
- //   shadedWireframeShaderProgram->setUniformValue("LineWidth", 0.5f);
- //   shadedWireframeShaderProgram->setUniformValue("LineColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
+    shadedWireframeShaderProgram->bind();
+    shadedWireframeShaderProgram->setUniformValue("mvp", mvp);
+    shadedWireframeShaderProgram->setUniformValue("mv", mv);
+	float halfWidth = width() * 0.5f;
+	float halfHeight = height() / 2.0f;
+	QMatrix4x4 viewport = viewport = QMatrix4x4(halfWidth, 0.0f, 0.0f, 0.0f,
+		0.0f, halfHeight, 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		halfWidth + 0, halfHeight + 0, 0.0f, 1.0f);
+    shadedWireframeShaderProgram->setUniformValue("viewport", viewport);
 
  //   //zoneVAO.bind();
  //   //glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	//faceVAO.bind();
-	//glDrawElements(GL_TRIANGLES, faceIndices.count(), GL_UNSIGNED_INT, nullptr);
+	faceVAO.bind();
+	glDrawElements(GL_TRIANGLES, faceIndices.count(), GL_UNSIGNED_INT, nullptr);
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -231,138 +278,138 @@ void OpenGLWindow::keyReleaseEvent(QKeyEvent* event)
     camera->onKeyReleased(event->key());
 }
 
-void OpenGLWindow::loadDataFiles()
-{
-    // 加载模型网格数据
-	QFile modelFile("asset/data/model001.f3grid");
-	if (modelFile.open(QIODevice::ReadOnly))
-	{
-		QTextStream in(&modelFile);
-		while (!in.atEnd())
-		{
-            QString header;
-            in >> header;
-            if (header == "G")
-            {
-				int index;
-				Vertex vertex;
-				in >> index >> vertex.position[0] >> vertex.position[1] >> vertex.position[2];
-
-				vertices.append(vertex);
-            }
-            else if (header == "Z")
-            {
-                Zone zone;
-                QString type;
-                int Index;
-                in >> type >> Index;
-
-				if (type == "W6")
-				{
-					zone.type = W6;
-					zone.num = 6;
-				}
-                else if (type == "B8")
-                {
-                    zone.type = B8;
-                    zone.num = 8;
-                }
-                else
-                {
-                    qDebug() << "Unknown zone type: " << type;
-                    return;
-                }
-
-                for (int i = 0; i < zone.num; ++i)
-                {
-                    in >> zone.indices[i];
-                    zone.indices[i] -= 1;
-                }
-
-                zones.append(zone);
-            }
-            else if (header == "F")
-            {
-				Face face;
-				QString type;
-				int Index;
-				in >> type >> Index;
-
-				if (type == "Q4")
-				{
-					face.type = Q4;
-					face.num = 4;
-				}
-				else if (type == "T3")
-				{
-					face.type = T3;
-					face.num = 3;
-				}
-				else
-				{
-					qDebug() << "Unknown zone type: " << type;
-					return;
-				}
-
-				for (int i = 0; i < face.num; ++i)
-				{
-					in >> face.indices[i];
-					face.indices[i] -= 1;
-				}
-
-				faces.append(face);
-            }
-			in.readLine();
-		}
-		modelFile.close();
-	}
-
-	// 加载三向（XYZ）位移数据数据
-	QFile gridFile("asset/data/gridpoint_result.txt");
-    if (gridFile.open(QIODevice::ReadOnly))
-    {
-        QTextStream in(&gridFile);
-        in.readLine();
-        while (!in.atEnd())
-        {
-            int index;
-            in >> index;
-            index -= 1;
-
-            in >> vertices[index].displacement[0] >>
-                vertices[index].displacement[1] >>
-                vertices[index].displacement[2];
-            in.readLine();
-        }
-
-        gridFile.close();
-    }
-
-	// 加载应力数据
-	QFile sigForceFile("asset/data/zone_result.txt");
-	if (sigForceFile.open(QIODevice::ReadOnly))
-	{
-		QTextStream in(&sigForceFile);
-		in.readLine();
-		while (!in.atEnd())
-		{
-			int index;
-			in >> index;
-			index -= 1;
-
-			in >> vertices[index].Sig123[0] >>
-				vertices[index].Sig123[1] >>
-				vertices[index].Sig123[2] >>
-				vertices[index].SigXYZS[0] >>
-				vertices[index].SigXYZS[1] >>
-				vertices[index].SigXYZS[2] >>
-				vertices[index].SigXYZS[3];
-			in.readLine();
-		}
-
-        sigForceFile.close();
-	}
-}
+//void OpenGLWindow::loadDataFiles()
+//{
+//    // 加载模型网格数据
+//	QFile modelFile("asset/data/model001.f3grid");
+//	if (modelFile.open(QIODevice::ReadOnly))
+//	{
+//		QTextStream in(&modelFile);
+//		while (!in.atEnd())
+//		{
+//            QString header;
+//            in >> header;
+//            if (header == "G")
+//            {
+//				int index;
+//				Vertex vertex;
+//				in >> index >> vertex.position[0] >> vertex.position[1] >> vertex.position[2];
+//
+//				vertices.append(vertex);
+//            }
+//            else if (header == "Z")
+//            {
+//                Zone zone;
+//                QString type;
+//                int Index;
+//                in >> type >> Index;
+//
+//				if (type == "W6")
+//				{
+//					zone.type = W6;
+//					zone.num = 6;
+//				}
+//                else if (type == "B8")
+//                {
+//                    zone.type = B8;
+//                    zone.num = 8;
+//                }
+//                else
+//                {
+//                    qDebug() << "Unknown zone type: " << type;
+//                    return;
+//                }
+//
+//                for (int i = 0; i < zone.num; ++i)
+//                {
+//                    in >> zone.indices[i];
+//                    zone.indices[i] -= 1;
+//                }
+//
+//                zones.append(zone);
+//            }
+//            else if (header == "F")
+//            {
+//				Face face;
+//				QString type;
+//				int Index;
+//				in >> type >> Index;
+//
+//				if (type == "Q4")
+//				{
+//					face.type = Q4;
+//					face.num = 4;
+//				}
+//				else if (type == "T3")
+//				{
+//					face.type = T3;
+//					face.num = 3;
+//				}
+//				else
+//				{
+//					qDebug() << "Unknown zone type: " << type;
+//					return;
+//				}
+//
+//				for (int i = 0; i < face.num; ++i)
+//				{
+//					in >> face.indices[i];
+//					face.indices[i] -= 1;
+//				}
+//
+//				faces.append(face);
+//            }
+//			in.readLine();
+//		}
+//		modelFile.close();
+//	}
+//
+//	// 加载三向（XYZ）位移数据数据
+//	QFile gridFile("asset/data/gridpoint_result.txt");
+//    if (gridFile.open(QIODevice::ReadOnly))
+//    {
+//        QTextStream in(&gridFile);
+//        in.readLine();
+//        while (!in.atEnd())
+//        {
+//            int index;
+//            in >> index;
+//            index -= 1;
+//
+//            in >> vertices[index].displacement[0] >>
+//                vertices[index].displacement[1] >>
+//                vertices[index].displacement[2];
+//            in.readLine();
+//        }
+//
+//        gridFile.close();
+//    }
+//
+//	// 加载应力数据
+//	QFile sigForceFile("asset/data/zone_result.txt");
+//	if (sigForceFile.open(QIODevice::ReadOnly))
+//	{
+//		QTextStream in(&sigForceFile);
+//		in.readLine();
+//		while (!in.atEnd())
+//		{
+//			int index;
+//			in >> index;
+//			index -= 1;
+//
+//			in >> vertices[index].Sig123[0] >>
+//				vertices[index].Sig123[1] >>
+//				vertices[index].Sig123[2] >>
+//				vertices[index].SigXYZS[0] >>
+//				vertices[index].SigXYZS[1] >>
+//				vertices[index].SigXYZS[2] >>
+//				vertices[index].SigXYZS[3];
+//			in.readLine();
+//		}
+//
+//        sigForceFile.close();
+//	}
+//}
 
 bool OpenGLWindow::loadDatabase()
 {
@@ -445,22 +492,81 @@ bool OpenGLWindow::loadDatabase()
 	//}
 
 	// 查询模型所有外表面对应的节点索引信息
-	//query.exec("SELECT * FROM EXTERIOR");
-	//record = query.record();
-	//while (query.next())
-	//{
-	//	Face face;
-	//	face.num = query.value(3).toInt();
-	//	for (int i = 0; i < face.num; ++i)
-	//	{
-	//		face.indices[i] = query.value(i + 4).toInt() - 1;
-	//	}
+	query.exec("SELECT * FROM EXTERIOR");
+	record = query.record();
+	while (query.next())
+	{
+		Face face;
+		face.num = query.value(3).toInt();
+		for (int i = 0; i < face.num; ++i)
+		{
+			face.indices[i] = query.value(i + 4).toInt() - 1;
+		}
 
-	//	faces.append(face);
-	//}
+		faces.append(face);
+	}
 
 	// 查询每个节点对应的计算结果值
-	//query.exec("SELECT * FROM RESULTS");
+	query.exec("SELECT * FROM RESULTS");
+	record = query.record();
+	while (query.next())
+	{
+		int index = query.value(0).toInt() - 1;
+		vertices[index].totalDeformation = query.value(1).toFloat();
+		valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, vertices[index].totalDeformation);
+		valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, vertices[index].totalDeformation);
+
+		int i = 2;
+		for (int j = 0; j < 3; ++j)
+		{
+			vertices[index].deformation[j] = query.value(i++).toFloat();
+		}
+		valueRange.minDeformation = qMinVec3(valueRange.minDeformation, vertices[index].deformation);
+		valueRange.maxDeformation = qMaxVec3(valueRange.maxDeformation, vertices[index].deformation);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			vertices[index].normalElasticStrain[j] = query.value(i++).toFloat();
+		}
+		valueRange.minNormalElasticStrain = qMinVec3(valueRange.minNormalElasticStrain, vertices[index].normalElasticStrain);
+		valueRange.maxNormalElasticStrain = qMaxVec3(valueRange.maxNormalElasticStrain, vertices[index].normalElasticStrain);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			vertices[index].shearElasticStrain[j] = query.value(i++).toFloat();
+		}
+		valueRange.minShearElasticStrain = qMinVec3(valueRange.minShearElasticStrain, vertices[index].shearElasticStrain);
+		valueRange.maxShearElasticStrain = qMaxVec3(valueRange.maxShearElasticStrain, vertices[index].shearElasticStrain);
+
+		vertices[index].maximumPrincipalStress = query.value(i++).toFloat();
+		valueRange.minMaximumPrincipalStress = qMin(valueRange.minMaximumPrincipalStress, vertices[index].maximumPrincipalStress);
+		valueRange.maxMaximumPrincipalStress = qMax(valueRange.maxMaximumPrincipalStress, vertices[index].maximumPrincipalStress);
+
+		vertices[index].middlePrincipalStress = query.value(i++).toFloat();
+		valueRange.minMiddlePrincipalStress = qMin(valueRange.minMiddlePrincipalStress, vertices[index].middlePrincipalStress);
+		valueRange.maxMiddlePrincipalStress = qMax(valueRange.maxMiddlePrincipalStress, vertices[index].middlePrincipalStress);
+
+		vertices[index].minimumPrincipalStress = query.value(i++).toFloat();
+		valueRange.minMinimumPrincipalStress = qMin(valueRange.minMinimumPrincipalStress, vertices[index].minimumPrincipalStress);
+		valueRange.maxMinimumPrincipalStress = qMax(valueRange.maxMinimumPrincipalStress, vertices[index].minimumPrincipalStress);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			vertices[index].normalStress[j] = query.value(i++).toFloat();
+		}
+		valueRange.minNormalStress = qMinVec3(valueRange.minNormalStress, vertices[index].normalStress);
+		valueRange.maxNormalStress = qMaxVec3(valueRange.maxNormalStress, vertices[index].normalStress);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			vertices[index].shearStress[j] = query.value(i++).toFloat();
+		}
+		valueRange.minShearStress = qMinVec3(valueRange.minShearStress, vertices[index].shearStress);
+		valueRange.maxShearStress = qMaxVec3(valueRange.maxShearStress, vertices[index].shearStress);
+	}
+
+	// 查询计算结果类型、名称
+	//query.exec("SELECT * FROM RSTTYPE");
 	//record = query.record();
 	//while (query.next())
 	//{
@@ -472,20 +578,6 @@ bool OpenGLWindow::loadDatabase()
 
 	//	qDebug() << str;
 	//}
-
-	// 查询计算结果类型、名称
-	query.exec("SELECT * FROM RSTTYPE");
-	record = query.record();
-	while (query.next())
-	{
-		QString str;
-		for (int i = 0; i < record.count(); ++i)
-		{
-			str += query.value(i).toString() + "-";
-		}
-
-		qDebug() << str;
-	}
 
 	return true;
 }
@@ -553,4 +645,22 @@ void OpenGLWindow::createRenderData()
 				});
 		}
 	}
+}
+
+QVector3D OpenGLWindow::qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
+{
+	return QVector3D(
+		qMin(lhs[0], rhs[0]),
+		qMin(lhs[1], rhs[1]),
+		qMin(lhs[2], rhs[2])
+	);
+}
+
+QVector3D OpenGLWindow::qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
+{
+	return QVector3D(
+		qMax(lhs[0], rhs[0]),
+		qMax(lhs[1], rhs[1]),
+		qMax(lhs[2], rhs[2])
+	);
 }

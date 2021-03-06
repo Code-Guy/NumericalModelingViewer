@@ -1,30 +1,73 @@
 #version 330
 
-noperspective in vec4 GEdgeDistance;
+in float GTotalDeformation;
+in vec3 GDeformation;
+in vec3 GNormalElasticStrain;
+in vec3 GShearElasticStrain;
+in float GMaximumPrincipalStress;
+in float GMiddlePrincipalStress;
+in float GMinimumPrincipalStress;
+in vec3 GNormalStress;
+in vec3 GShearStress;
+noperspective in vec3 GEdgeDistance;
 
 out vec4 FColor;
 
-uniform float LineWidth;
-uniform vec4 LineColor;
+uniform float lineWidth;
+uniform vec4 lineColor;
 
-void main() 
+uniform float minTotalDeformation;
+uniform float maxTotalDeformation;
+
+uniform vec3 minDeformation;
+uniform vec3 maxDeformation;
+
+uniform vec3 minNormalElasticStrain;
+uniform vec3 maxNormalElasticStrain;
+
+uniform vec3 minShearElasticStrain;
+uniform vec3 maxShearElasticStrain;
+
+uniform float minMaximumPrincipalStress;
+uniform float maxMaximumPrincipalStress;
+
+uniform float minMiddlePrincipalStress;
+uniform float maxMiddlePrincipalStress;
+
+uniform float minMinimumPrincipalStress;
+uniform float maxMinimumPrincipalStress;
+
+uniform vec3 minNormalStress;
+uniform vec3 maxNormalStress;
+
+uniform vec3 minShearStress;
+uniform vec3 maxShearStress;
+
+const vec3 heatmapColors[5] = vec3[5](
+	vec3(0, 0, 1), vec3(0, 1, 1), vec3(0, 1, 0), vec3(1, 1, 0), vec3(1, 0, 0)
+);
+
+vec3 calcHeatmapColor(float val, float minVal, float maxVal)
 {
-	vec4 shadeColor = vec4(1.0, 1.0, 1.0, 1.0);
+	float i = (val - minVal) / (maxVal - minVal) * 5.0;
+	int low = int(floor(i));
+	int high = int(ceil(i));
+
+	float t = i - low;
+	return mix(heatmapColors[low], heatmapColors[high], t);
+}
+
+void main()
+{
+	vec4 shadeColor = vec4(calcHeatmapColor(GTotalDeformation, minTotalDeformation, maxTotalDeformation), 1.0);
 
 	float d = min(GEdgeDistance.x, GEdgeDistance.y);
 	d = min(d, GEdgeDistance.z);
 
-	float mixVal;
-	if ((d == GEdgeDistance.x && GEdgeDistance.w == 0) ||
-		(d == GEdgeDistance.y && GEdgeDistance.w == 1) ||
-		(d == GEdgeDistance.z && GEdgeDistance.w == 2))
-	{
-		mixVal = 1.0;
-	}
-	else
-	{
-		mixVal = smoothstep(LineWidth - 1, LineWidth + 1, d);
-	}
+	float mixVal = smoothstep(lineWidth - 1, lineWidth + 1, d);
+	FColor = mix(lineColor, shadeColor, mixVal);
 
-	FColor = mix(LineColor, shadeColor, mixVal);
+	// gamma correction
+	// float gamma = 2.2;
+ //    FColor.rgb = pow(FColor.rgb, vec3(1.0 / gamma));
 }
