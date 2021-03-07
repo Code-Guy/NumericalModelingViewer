@@ -15,10 +15,10 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
     // 加载数据
     //loadDataFiles();
 	loadDatabase();
+	clipExteriorSurface();
+	//interpUniformGridData();
 
-	// 创建渲染所需要的数据
-    createRenderData();
-
+	// 切割
     // 初始化摄像机
 	/*camera = new Camera(QVector3D(-30.0f, 72.0f, 72.0f), 308.0f, -30.0f, 20.0f, 0.1f);
 	camera->setClipping(0.1f, 1000.0f);*/
@@ -448,8 +448,48 @@ bool OpenGLWindow::loadDatabase()
 		}
 		
 		zones.append(zone);
-	}
 
+		if (zone.num == 8)
+		{
+			wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
+				zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[2], zone.indices[4],
+				zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2],
+				zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6],
+				zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
+
+			zoneIndices.append({ zone.indices[0], zone.indices[2], zone.indices[1],
+				zone.indices[2], zone.indices[4], zone.indices[1],
+				zone.indices[0], zone.indices[3], zone.indices[2],
+				zone.indices[3], zone.indices[5], zone.indices[2],
+				zone.indices[0], zone.indices[1], zone.indices[3],
+				zone.indices[1], zone.indices[6], zone.indices[3],
+				zone.indices[2], zone.indices[5], zone.indices[4],
+				zone.indices[5], zone.indices[7], zone.indices[4],
+				zone.indices[1], zone.indices[4], zone.indices[7],
+				zone.indices[1], zone.indices[7], zone.indices[6],
+				zone.indices[3], zone.indices[7], zone.indices[5],
+				zone.indices[3], zone.indices[6], zone.indices[7]
+				});
+		}
+		else if (zone.num == 6)
+		{
+			wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
+				zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
+				zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
+				zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
+
+			zoneIndices.append({ zone.indices[2], zone.indices[5], zone.indices[4],
+			zone.indices[0], zone.indices[1], zone.indices[3],
+			zone.indices[1], zone.indices[4], zone.indices[3],
+			zone.indices[3], zone.indices[4], zone.indices[5],
+			zone.indices[0], zone.indices[3], zone.indices[5],
+			zone.indices[0], zone.indices[5], zone.indices[2],
+			zone.indices[0], zone.indices[2], zone.indices[4],
+			zone.indices[0], zone.indices[4], zone.indices[1]
+				});
+		}
+	}
+ 
 	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
 	query.exec("SELECT * FROM ELEMEDGES");
 	record = query.record();
@@ -472,6 +512,11 @@ bool OpenGLWindow::loadDatabase()
 		{
 			vertex.position[i] = query.value(i + 1).toFloat();
 		}
+
+		boundingBox.min = qMinVec3(boundingBox.min, vertex.position);
+		boundingBox.max = qMaxVec3(boundingBox.max, vertex.position);
+		coords.push_back(toArr3(vertex.position));
+		mpiVertices.push_back(toArr3(vertex.position));
 
 		vertices.append(vertex);
 	}
@@ -504,6 +549,23 @@ bool OpenGLWindow::loadDatabase()
 		}
 
 		faces.append(face);
+
+		if (face.num == 3)
+		{
+			faceIndices.append({
+				face.indices[0], face.indices[1], face.indices[2]
+				});
+			mpiFaces.push_back({ (int)face.indices[0], (int)face.indices[1], (int)face.indices[2] });
+		}
+		else if (face.num == 4)
+		{
+			faceIndices.append({
+				face.indices[0], face.indices[2], face.indices[1],
+				face.indices[0], face.indices[3], face.indices[2]
+				});
+			mpiFaces.push_back({ (int)face.indices[0], (int)face.indices[2], (int)face.indices[1] });
+			mpiFaces.push_back({ (int)face.indices[0], (int)face.indices[3], (int)face.indices[2] });
+		}
 	}
 
 	// 查询每个节点对应的计算结果值
@@ -515,6 +577,7 @@ bool OpenGLWindow::loadDatabase()
 		vertices[index].totalDeformation = query.value(1).toFloat();
 		valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, vertices[index].totalDeformation);
 		valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, vertices[index].totalDeformation);
+		values.push_back(vertices[index].totalDeformation);
 
 		int i = 2;
 		for (int j = 0; j < 3; ++j)
@@ -582,69 +645,51 @@ bool OpenGLWindow::loadDatabase()
 	return true;
 }
 
-void OpenGLWindow::createRenderData()
+void OpenGLWindow::interpUniformGridData()
 {
-   // for (const Zone& zone : zones)
-   // {
-   //     //const Zone& zone = zones[15300];
-   //     if (zone.num == 8)
-   //     {
-   //         wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-   //             zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[2], zone.indices[4], 
-   //             zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2], 
-   //             zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6], 
-   //             zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
+	BoundingBox scaledBoundingBox = boundingBox;
+	scaledBoundingBox.scale(1.1f);
+	mba::point<3> low = toArr3(scaledBoundingBox.min);
+	mba::point<3> high = toArr3(scaledBoundingBox.max);
 
-   //         zoneIndices.append({ zone.indices[0], zone.indices[2], zone.indices[1],
-   //             zone.indices[2], zone.indices[4], zone.indices[1],
-   //             zone.indices[0], zone.indices[3], zone.indices[2],
-   //             zone.indices[3], zone.indices[5], zone.indices[2],
-   //             zone.indices[0], zone.indices[1], zone.indices[3],
-   //             zone.indices[1], zone.indices[6], zone.indices[3],
-   //             zone.indices[2], zone.indices[5], zone.indices[4],
-   //             zone.indices[5], zone.indices[7], zone.indices[4],
-   //             zone.indices[1], zone.indices[4], zone.indices[7],
-   //             zone.indices[1], zone.indices[7], zone.indices[6],
-   //             zone.indices[3], zone.indices[7], zone.indices[5],
-   //             zone.indices[3], zone.indices[6], zone.indices[7]
-   //             });
-   //     }
-   //     else if (zone.num == 6)
-   //     {
-   //         wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-   //             zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
-   //             zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
-   //             zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
+	mba::index<3> dim = { 64, 64, 64 };
+	mba::MBA<3> interp(low, high, dim, coords, values);
 
-			//zoneIndices.append({ zone.indices[2], zone.indices[5], zone.indices[4],
-			//	zone.indices[0], zone.indices[1], zone.indices[3],
-			//	zone.indices[1], zone.indices[4], zone.indices[3],
-			//	zone.indices[3], zone.indices[4], zone.indices[5],
-			//	zone.indices[0], zone.indices[3], zone.indices[5],
-			//	zone.indices[0], zone.indices[5], zone.indices[2],
-			//	zone.indices[0], zone.indices[2], zone.indices[4],
-			//	zone.indices[0], zone.indices[4], zone.indices[1]
-			//	});
-   //     }
-   // }
+	UniformGrid uniformGrid;
+	uniformGrid.dim = dim;
+	uniformGrid.vertices.resize((dim[0] + 1) * (dim[1] + 1) * (dim[2] + 1));
+	mba::point<3> min = toArr3(boundingBox.min);
+	mba::point<3> max = toArr3(boundingBox.max);
 
-	for (const Face& face : faces)
+	int index = 0;
+	for (int i = 0; i <= dim[0]; ++i)
 	{
-		//const Face& face = faces[i];
-		if (face.num == 3)
+		for (int j = 0; j <= dim[1]; ++j)
 		{
-			faceIndices.append({
-				face.indices[0], face.indices[1], face.indices[2]
-				});
-		}
-		else if (face.num == 4)
-		{
-			faceIndices.append({
-				face.indices[0], face.indices[2], face.indices[1],
-				face.indices[0], face.indices[3], face.indices[2]
-				});
+			for (int k = 0; k <= dim[2]; ++k)
+			{
+				mba::point<3> point;
+				point[0] = qLerp<float>(min[0], max[0], (float)i / dim[0]);
+				point[1] = qLerp<float>(min[1], max[1], (float)j / dim[1]);
+				point[2] = qLerp<float>(min[2], max[2], (float)k / dim[2]);
+
+				double value = interp(point);
+				uniformGrid.vertices[index].position = toVec3(point);
+				uniformGrid.vertices[index].totalDeformation = value;
+
+				//qDebug() << uniformGrid.vertices[index].position << uniformGrid.vertices[index].totalDeformation;
+				index++;
+			}
 		}
 	}
+}
+
+void OpenGLWindow::clipExteriorSurface()
+{
+	Intersector::Mesh mesh(mpiVertices, mpiFaces);
+	Intersector::Plane plane;
+	auto result = mesh.Intersect(plane);
+
 }
 
 QVector3D OpenGLWindow::qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
@@ -663,4 +708,14 @@ QVector3D OpenGLWindow::qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
 		qMax(lhs[1], rhs[1]),
 		qMax(lhs[2], rhs[2])
 	);
+}
+
+QVector3D OpenGLWindow::toVec3(const std::array<double, 3>& arr3)
+{
+	return QVector3D(arr3[0], arr3[1], arr3[2]);
+}
+
+std::array<double, 3> OpenGLWindow::toArr3(const QVector3D& vec3)
+{
+	return std::array<double, 3>{vec3[0], vec3[1], vec3[2]};
 }

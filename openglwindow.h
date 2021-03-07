@@ -13,6 +13,12 @@
 #include <QMouseEvent>
 #include <QElapsedTimer>
 #include <QTimer>
+#include <vector>
+#include <array>
+#include <mba/mba.hpp>
+#include <mpi/mpi.hpp>
+
+typedef MeshPlaneIntersect<double, int> Intersector;
 
 //struct Vertex
 //{
@@ -94,6 +100,25 @@ struct Face
 	quint32 indices[4];
 };
 
+struct BoundingBox
+{
+    QVector3D min = kMaxVec3;
+    QVector3D max = kMinVec3;
+
+    void scale(float s)
+    {
+        QVector3D offset = (max - min) * (s - 1.0f);
+        min -= offset;
+        max += offset;
+    }
+};
+
+struct UniformGrid
+{
+   std::array<size_t, 3> dim;
+   std::vector<Vertex> vertices;
+};
+
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
@@ -115,15 +140,33 @@ protected:
 private:
     //void loadDataFiles();
     bool loadDatabase();
-    void createRenderData();
+    void interpUniformGridData();
+    void clipExteriorSurface();
+
     QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs);
     QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs);
+    
+    template <typename T>
+    T qLerp(T a, T b, T t)
+	{
+		return a * (1 - t) + b * t;
+	}
+
+    QVector3D toVec3(const std::array<double, 3>& arr3);
+    std::array<double, 3> toArr3(const QVector3D& vec3);
 
     QVector<Vertex> vertices;
-    QVector<Zone> zones;
+    std::vector<Intersector::Vec3D> mpiVertices;
     QVector<Face> faces;
+    std::vector<Intersector::Face> mpiFaces;
+
+    QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
+
+    BoundingBox boundingBox;
+    std::vector<std::array<double, 3>> coords;
+    std::vector<double> values;
 
     QOpenGLShaderProgram* wireframeShaderProgram;
     QOpenGLShaderProgram* shadedWireframeShaderProgram;
