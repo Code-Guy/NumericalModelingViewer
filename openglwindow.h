@@ -42,6 +42,12 @@ struct Vertex
     QVector3D shearStress;
 };
 
+struct SectionVertex
+{
+    QVector3D position;
+    QVector3D texcoord;
+};
+
 const float kMaxVal = 1e8f;
 const float kMinVal = -kMaxVal;
 const QVector3D kMaxVec3 = QVector3D(kMaxVal, kMaxVal, kMaxVal);
@@ -164,14 +170,16 @@ private:
     ValueRange valueRange;
 	QVector<int> zoneTypes;
 
+    Intersector::Plane plane;
     BoundingBox boundingBox;
     std::vector<std::array<double, 3>> coords;
     std::vector<double> values;
 
     QOpenGLShaderProgram* wireframeShaderProgram;
     QOpenGLShaderProgram* shadedWireframeShaderProgram;
+    QOpenGLShaderProgram* sectionShaderProgram;
 
-    QOpenGLBuffer modelVBO;
+    QOpenGLBuffer nodeVBO;
 
     QOpenGLVertexArrayObject wireframeVAO;
     QVector<GLuint> wireframeIndices;
@@ -184,6 +192,12 @@ private:
 	QOpenGLVertexArrayObject faceVAO;
 	QVector<GLuint> faceIndices;
 	QOpenGLBuffer faceIBO;
+
+    QOpenGLBuffer sectionVBO;
+	QOpenGLVertexArrayObject sectionVAO;
+    QVector<SectionVertex> sectionVertices;
+	QVector<GLuint> sectionIndices;
+	QOpenGLBuffer sectionIBO;
 
     class Camera* camera;
     QTimer updateTimer;

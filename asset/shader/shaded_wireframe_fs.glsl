@@ -1,5 +1,6 @@
 #version 330
 
+in vec3 GPosition;
 in float GTotalDeformation;
 in vec3 GDeformation;
 in vec3 GNormalElasticStrain;
@@ -43,6 +44,9 @@ uniform vec3 maxNormalStress;
 uniform vec3 minShearStress;
 uniform vec3 maxShearStress;
 
+uniform vec3 planeOrigin;
+uniform vec3 planeNormal;
+
 const vec3 heatmapColors[5] = vec3[5](
 	vec3(0, 0, 1), vec3(0, 1, 1), vec3(0, 1, 0), vec3(1, 1, 0), vec3(1, 0, 0)
 );
@@ -57,8 +61,19 @@ vec3 calcHeatmapColor(float val, float minVal, float maxVal)
 	return mix(heatmapColors[low], heatmapColors[high], t);
 }
 
+bool isOnFrontSideOfPlane(vec3 point)
+{
+	return dot(planeNormal, point) - dot(planeNormal, planeOrigin) > 0;
+}
+
 void main()
 {
+	if (!isOnFrontSideOfPlane(GPosition))
+	{
+		discard;
+		return;
+	}
+
 	vec4 shadeColor = vec4(calcHeatmapColor(GTotalDeformation, minTotalDeformation, maxTotalDeformation), 1.0);
 
 	float d = min(GEdgeDistance.x, GEdgeDistance.y);
@@ -69,5 +84,5 @@ void main()
 
 	// gamma correction
 	// float gamma = 2.2;
- //    FColor.rgb = pow(FColor.rgb, vec3(1.0 / gamma));
+	// FColor.rgb = pow(FColor.rgb, vec3(1.0 / gamma));
 }

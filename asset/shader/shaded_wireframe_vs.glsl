@@ -11,6 +11,7 @@ layout(location = 7) in float minimumPrincipalStress;
 layout(location = 8) in vec3 normalStress;
 layout(location = 9) in vec3 shearStress;
 
+out vec3 VPosition;
 out float VTotalDeformation;
 out vec3 VDeformation;
 out vec3 VNormalElasticStrain;
@@ -26,6 +27,7 @@ uniform mat4 mvp;
 
 void main()
 {
+	VPosition = position;
 	VTotalDeformation = totalDeformation;
 	VDeformation = deformation;
 	VNormalElasticStrain = normalElasticStrain;

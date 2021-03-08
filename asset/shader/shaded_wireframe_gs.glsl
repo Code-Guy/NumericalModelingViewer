@@ -3,6 +3,7 @@
 layout( triangles ) in;
 layout( triangle_strip, max_vertices = 3 ) out;
 
+in vec3 VPosition[];
 in float VTotalDeformation[];
 in vec3 VDeformation[];
 in vec3 VNormalElasticStrain[];
@@ -13,6 +14,7 @@ in float VMinimumPrincipalStress[];
 in vec3 VNormalStress[];
 in vec3 VShearStress[];
 
+out vec3 GPosition;
 out float GTotalDeformation;
 out vec3 GDeformation;
 out vec3 GNormalElasticStrain;
@@ -45,6 +47,7 @@ void main()
 	float hc = abs( b * sin( alpha ) );
 
 	// Send the triangle along with the edge distances
+	GPosition = VPosition[0];
 	GTotalDeformation = VTotalDeformation[0];
 	GDeformation = VDeformation[0];
 	GNormalElasticStrain = VNormalElasticStrain[0];
@@ -58,6 +61,7 @@ void main()
 	gl_Position = gl_in[0].gl_Position;
 	EmitVertex();
 
+	GPosition = VPosition[1];
 	GTotalDeformation = VTotalDeformation[1];
 	GDeformation = VDeformation[1];
 	GNormalElasticStrain = VNormalElasticStrain[1];
@@ -71,6 +75,7 @@ void main()
 	gl_Position = gl_in[1].gl_Position;
 	EmitVertex();
 
+	GPosition = VPosition[2];
 	GTotalDeformation = VTotalDeformation[2];
 	GDeformation = VDeformation[2];
 	GNormalElasticStrain = VNormalElasticStrain[2];

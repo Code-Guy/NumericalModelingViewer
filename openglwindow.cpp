@@ -36,14 +36,18 @@ OpenGLWindow::~OpenGLWindow()
 
     delete wireframeShaderProgram;
     delete shadedWireframeShaderProgram;
+	delete sectionShaderProgram;
 
-    modelVBO.destroy();
+    nodeVBO.destroy();
+	sectionVBO.destroy();
     wireframeVAO.destroy();
     wireframeIBO.destroy();
 	zoneVAO.destroy();
 	zoneIBO.destroy();
 	faceVAO.destroy();
 	faceIBO.destroy();
+	sectionVAO.destroy();
+	sectionIBO.destroy();
 
     doneCurrent();
 }
@@ -85,21 +89,31 @@ void OpenGLWindow::initializeGL()
 		success = shadedWireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/shaded_wireframe_fs.glsl");
 		Q_ASSERT_X(success, "shadedWireframeShaderProgram", qPrintable(shadedWireframeShaderProgram->log()));
 		shadedWireframeShaderProgram->link();
+
+		sectionShaderProgram = new QOpenGLShaderProgram;
+		success = sectionShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/section_vs.glsl");
+		Q_ASSERT_X(success, "sectionShaderProgram", qPrintable(sectionShaderProgram->log()));
+
+		success = sectionShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/section_fs.glsl");
+		Q_ASSERT_X(success, "sectionShaderProgram", qPrintable(sectionShaderProgram->log()));
+		sectionShaderProgram->link();
+
+		qDebug() << "sectionShaderProgram" << sectionShaderProgram->log();
     }
 	
 	// create the vertex buffer object
-	modelVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-	modelVBO.create();
-	modelVBO.bind();
-	modelVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-	modelVBO.allocate(vertices.constData(), vertices.count() * sizeof(Vertex));
+	nodeVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+	nodeVBO.create();
+	nodeVBO.bind();
+	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+	nodeVBO.allocate(vertices.constData(), vertices.count() * sizeof(Vertex));
 
     // 创建线框模式相关渲染资源
     {
 		// create the vertex array object
 		wireframeVAO.create();
 		wireframeVAO.bind();
-		modelVBO.bind();
+		nodeVBO.bind();
 
 		// create the index buffer object
 		wireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
@@ -111,14 +125,14 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		wireframeShaderProgram->bind();
 		wireframeShaderProgram->enableAttributeArray(0);
-		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(Vertex));
+		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
     }
     
     // 创建单元模式相关渲染资源
     {
 		zoneVAO.create();
 		zoneVAO.bind();
-		modelVBO.bind();
+		nodeVBO.bind();
 
 		// create the index buffer object
 		zoneIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
@@ -130,14 +144,14 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
 		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
     }
 
 	// 创建Face相关渲染资源
 	{
 		faceVAO.create();
 		faceVAO.bind();
-		modelVBO.bind();
+		nodeVBO.bind();
 
 		// create the index buffer object
 		faceIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
@@ -199,6 +213,35 @@ void OpenGLWindow::initializeGL()
 
 		shadedWireframeShaderProgram->setUniformValue("minShearStress", valueRange.minShearStress);
 		shadedWireframeShaderProgram->setUniformValue("maxShearStress", valueRange.maxShearStress);
+
+		shadedWireframeShaderProgram->setUniformValue("planeOrigin", toVec3(plane.origin));
+		shadedWireframeShaderProgram->setUniformValue("planeNormal", toVec3(plane.normal));
+	}
+
+	// 创建截面相关渲染资源
+	{
+		sectionVAO.create();
+		sectionVAO.bind();
+
+		sectionVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		sectionVBO.create();
+		sectionVBO.bind();
+		sectionVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		sectionVBO.allocate(sectionVertices.constData(), sectionVertices.count() * sizeof(SectionVertex));
+
+		// create the index buffer object
+		sectionIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		sectionIBO.create();
+		sectionIBO.bind();
+		sectionIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		sectionIBO.allocate(sectionIndices.constData(), sectionIndices.count() * sizeof(GLuint));
+
+		// connect the inputs to the shader program
+		sectionShaderProgram->bind();
+		sectionShaderProgram->enableAttributeArray(0);
+		sectionShaderProgram->enableAttributeArray(1);
+		sectionShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(SectionVertex, position), 3, sizeof(SectionVertex));
+		sectionShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(SectionVertex, texcoord), 3, sizeof(SectionVertex));
 	}
 
     // 初始化计时器
@@ -246,11 +289,17 @@ void OpenGLWindow::paintGL()
 		halfWidth + 0, halfHeight + 0, 0.0f, 1.0f);
     shadedWireframeShaderProgram->setUniformValue("viewport", viewport);
 
- //   //zoneVAO.bind();
- //   //glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//zoneVAO.bind();
+	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	faceVAO.bind();
 	glDrawElements(GL_TRIANGLES, faceIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	sectionShaderProgram->bind();
+	sectionShaderProgram->setUniformValue("mvp", mvp);
+
+	sectionVAO.bind();
+	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -491,16 +540,16 @@ bool OpenGLWindow::loadDatabase()
 	}
  
 	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
-	query.exec("SELECT * FROM ELEMEDGES");
-	record = query.record();
-	while (query.next())
-	{
-		int num = query.value(2).toInt() * 2;
-		for (int i = 0; i < num; ++i)
-		{
-			wireframeIndices.append(query.value(i + 3).toInt() - 1);
-		}
-	}
+	//query.exec("SELECT * FROM ELEMEDGES");
+	//record = query.record();
+	//while (query.next())
+	//{
+	//	int num = query.value(2).toInt() * 2;
+	//	for (int i = 0; i < num; ++i)
+	//	{
+	//		wireframeIndices.append(query.value(i + 3).toInt() - 1);
+	//	}
+	//}
 
 	// 查询节点索引及空间坐标
 	query.exec("SELECT * FROM NODES");
@@ -686,10 +735,71 @@ void OpenGLWindow::interpUniformGridData()
 
 void OpenGLWindow::clipExteriorSurface()
 {
-	Intersector::Mesh mesh(mpiVertices, mpiFaces);
-	Intersector::Plane plane;
-	auto result = mesh.Intersect(plane);
+	mpiVertices.clear();
+	mpiFaces.clear();
 
+	double latitudeBands = 30;
+	double longitudeBands = 30;
+	double radius = 200;
+	double pi = 3.1415926;
+	for (double latNumber = 0; latNumber <= latitudeBands; latNumber++) {
+		double theta = latNumber * pi / latitudeBands;
+		double sinTheta = sin(theta);
+		double cosTheta = cos(theta);
+
+		for (double longNumber = 0; longNumber <= longitudeBands; longNumber++) {
+			double phi = longNumber * 2 * pi / longitudeBands;
+			double sinPhi = sin(phi);
+			double cosPhi = cos(phi);
+
+			mpiVertices.push_back({ radius * cosPhi * sinTheta, radius * cosTheta, radius * sinPhi * sinTheta });
+		}
+
+		for (int latNum = 0; latNum < latitudeBands; latNum++) {
+			for (int longNum = 0; longNum < longitudeBands; longNum++) {
+				int first = (latNum * (longitudeBands + 1)) + longNum;
+				int second = first + longitudeBands + 1;
+				mpiFaces.push_back({ first, second, first + 1 });
+				mpiFaces.push_back({ second, second + 1, first + 1 });
+			}
+		}
+	}
+
+	Intersector::Mesh mesh(mpiVertices, mpiFaces);
+	plane.origin = { 0.0, 0.0, 0.0 };
+	plane.normal = toArr3(QVector3D(-1.0, -1.0, -1.0).normalized());
+	std::vector<Intersector::Path3D> paths = mesh.Clip(plane);
+	//Q_ASSERT_X(paths.size() == 1 && !paths.front().isClosed, "clipExteriorSurface", "path size should be one and not closed!");
+
+	std::vector<Intersector::Path3D> pathss = { paths[0] };
+	for (const Intersector::Path3D& path : pathss)
+	{
+		SectionVertex center;
+		center.position = QVector3D(0.0f, 0.0f, 0.0f);
+		const auto& points = path.points;
+		uint32_t pointNum = (uint32_t)points.size();
+		for (size_t i = 0; i < pointNum; ++i)
+		{
+			center.position += toVec3(points[i]);
+		}
+		center.position /= pointNum;
+		uint32_t baseIndex = sectionVertices.count();
+		sectionVertices.append(center);
+
+		for (uint32_t i = 0; i < pointNum; ++i)
+		{
+			QVector3D current_position = toVec3(points[i]);
+			QVector3D next_position = toVec3(points[(i + 1) % pointNum]);
+
+			sectionVertices.append(SectionVertex{ current_position });
+			sectionIndices.append({ baseIndex, baseIndex + i + 1, baseIndex + (i + 1) % pointNum + 1 });
+		}
+	}
+
+	for (SectionVertex& vertex : sectionVertices)
+	{
+		vertex.texcoord = (vertex.position - boundingBox.min) / (boundingBox.max - boundingBox.min);
+	}
 }
 
 QVector3D OpenGLWindow::qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
