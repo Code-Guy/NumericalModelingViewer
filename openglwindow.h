@@ -2,7 +2,6 @@
 #define OPENGLWINDOW_H
 
 #include <QOpenGLWidget>
-#include <QMatrix4x4>
 #include <QOpenGLFunctions>
 #include <QOpenGLTexture>
 #include <QOpenGLBuffer>
@@ -16,42 +15,29 @@
 #include <vector>
 #include <array>
 #include <mba/mba.hpp>
-#include <mpi/mpi.hpp>
 
-typedef MeshPlaneIntersect<double, int> Intersector;
+#include "geoutil.h"
 
-//struct Vertex
-//{
-//    QVector3D position;
-//    QVector3D displacement;
-//    QVector3D Sig123;
-//    QVector4D SigXYZS;
-//};
-
-struct Vertex
+struct NodeVertex
 {
 	QVector3D position;
-    float totalDeformation;
+	float totalDeformation;
 	QVector3D deformation;
 	QVector3D normalElasticStrain;
 	QVector3D shearElasticStrain;
-    float maximumPrincipalStress;
-    float middlePrincipalStress;
-    float minimumPrincipalStress;
-    QVector3D normalStress;
-    QVector3D shearStress;
+	float maximumPrincipalStress;
+	float middlePrincipalStress;
+	float minimumPrincipalStress;
+	QVector3D normalStress;
+	QVector3D shearStress;
 };
 
 struct SectionVertex
 {
-    QVector3D position;
-    QVector3D texcoord;
+	QVector3D position;
+	QVector3D texcoord;
 };
 
-const float kMaxVal = 1e8f;
-const float kMinVal = -kMaxVal;
-const QVector3D kMaxVec3 = QVector3D(kMaxVal, kMaxVal, kMaxVal);
-const QVector3D kMinVec3 = QVector3D(kMinVal, kMinVal, kMinVal);
 struct ValueRange
 {
 	float minTotalDeformation = kMaxVal;
@@ -87,7 +73,7 @@ enum ZoneType
     W6, B8
 };
 
-enum FaceType
+enum FacetType
 {
 	Q4, T3
 };
@@ -99,30 +85,17 @@ struct Zone
     quint32 indices[8];
 };
 
-struct Face
+struct Facet
 {
-	FaceType type;
+	FacetType type;
 	int num;
 	quint32 indices[4];
 };
 
-struct BoundingBox
-{
-    QVector3D min = kMaxVec3;
-    QVector3D max = kMinVec3;
-
-    void scale(float s)
-    {
-        QVector3D offset = (max - min) * (s - 1.0f);
-        min -= offset;
-        max += offset;
-    }
-};
-
 struct UniformGrid
 {
-   std::array<size_t, 3> dim;
-   std::vector<Vertex> vertices;
+	std::array<size_t, 3> dim;
+	std::vector<NodeVertex> vertices;
 };
 
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
@@ -144,7 +117,6 @@ protected:
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
-    //void loadDataFiles();
     bool loadDatabase();
     void interpUniformGridData();
     void clipExteriorSurface();
@@ -161,16 +133,13 @@ private:
     QVector3D toVec3(const std::array<double, 3>& arr3);
     std::array<double, 3> toArr3(const QVector3D& vec3);
 
-    QVector<Vertex> vertices;
-    std::vector<Intersector::Vec3D> mpiVertices;
-    QVector<Face> faces;
-    std::vector<Intersector::Face> mpiFaces;
+    QVector<NodeVertex> vertices;
+    QVector<Facet> facets;
 
     QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
 
-    Intersector::Plane plane;
     BoundingBox boundingBox;
     std::vector<std::array<double, 3>> coords;
     std::vector<double> values;
@@ -191,9 +160,9 @@ private:
 	QVector<GLuint> zoneIndices;
 	QOpenGLBuffer zoneIBO;
 
-	QOpenGLVertexArrayObject faceVAO;
-	QVector<GLuint> faceIndices;
-	QOpenGLBuffer faceIBO;
+	QOpenGLVertexArrayObject facetVAO;
+	QVector<GLuint> facetIndices;
+	QOpenGLBuffer facetIBO;
 
     QOpenGLBuffer sectionVBO;
 	QOpenGLVertexArrayObject sectionVAO;

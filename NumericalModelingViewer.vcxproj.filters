@@ -41,6 +41,9 @@
     <ClCompile Include="camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="geoutil.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <QtUic Include="mainwindow.ui">
@@ -58,6 +61,9 @@
   <ItemGroup>
     <ClInclude Include="camera.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="geoutil.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

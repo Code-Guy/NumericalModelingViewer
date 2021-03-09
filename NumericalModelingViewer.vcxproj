@@ -98,6 +98,7 @@
   <ItemGroup>
     <ClCompile Include="camera.cpp" />
     <ClCompile Include="mainwindow.cpp" />
+    <ClCompile Include="geoutil.cpp" />
     <ClCompile Include="openglwindow.cpp" />
     <QtRcc Include="NumericalModelingViewer.qrc" />
     <ClCompile Include="main.cpp" />
@@ -113,6 +114,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="camera.h" />
+    <ClInclude Include="geoutil.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

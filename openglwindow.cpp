@@ -13,16 +13,11 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
     setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
     // 加载数据
-    //loadDataFiles();
 	loadDatabase();
 	clipExteriorSurface();
 	//interpUniformGridData();
 
-	// 切割
     // 初始化摄像机
-	/*camera = new Camera(QVector3D(-30.0f, 72.0f, 72.0f), 308.0f, -30.0f, 20.0f, 0.1f);
-	camera->setClipping(0.1f, 1000.0f);*/
-
 	camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
 	camera->setFovy(60.0f);
@@ -44,8 +39,8 @@ OpenGLWindow::~OpenGLWindow()
     wireframeIBO.destroy();
 	zoneVAO.destroy();
 	zoneIBO.destroy();
-	faceVAO.destroy();
-	faceIBO.destroy();
+	facetVAO.destroy();
+	facetIBO.destroy();
 	sectionVAO.destroy();
 	sectionIBO.destroy();
 
@@ -116,7 +111,7 @@ void OpenGLWindow::initializeGL()
 	nodeVBO.create();
 	nodeVBO.bind();
 	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-	nodeVBO.allocate(vertices.constData(), vertices.count() * sizeof(Vertex));
+	nodeVBO.allocate(vertices.constData(), vertices.count() * sizeof(NodeVertex));
 
 	// 创建基础节点相关渲染资源
 	{
@@ -126,7 +121,7 @@ void OpenGLWindow::initializeGL()
 
 		nodeShaderProgram->bind();
 		nodeShaderProgram->enableAttributeArray(0);
-		nodeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
+		nodeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
 	}
 
     // 创建线框模式相关渲染资源
@@ -146,7 +141,7 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		wireframeShaderProgram->bind();
 		wireframeShaderProgram->enableAttributeArray(0);
-		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
+		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
     }
     
     // 创建单元模式相关渲染资源
@@ -165,21 +160,21 @@ void OpenGLWindow::initializeGL()
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
 		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
     }
 
 	// 创建Face相关渲染资源
 	{
-		faceVAO.create();
-		faceVAO.bind();
+		facetVAO.create();
+		facetVAO.bind();
 		nodeVBO.bind();
 
 		// create the index buffer object
-		faceIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		faceIBO.create();
-		faceIBO.bind();
-		faceIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		faceIBO.allocate(faceIndices.constData(), faceIndices.count() * sizeof(GLuint));
+		facetIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		facetIBO.create();
+		facetIBO.bind();
+		facetIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(GLuint));
 
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
@@ -194,16 +189,16 @@ void OpenGLWindow::initializeGL()
 		shadedWireframeShaderProgram->enableAttributeArray(8);
 		shadedWireframeShaderProgram->enableAttributeArray(9);
 
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(Vertex, totalDeformation), 1, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(2, GL_FLOAT, offsetof(Vertex, deformation), 3, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(3, GL_FLOAT, offsetof(Vertex, normalElasticStrain), 3, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(4, GL_FLOAT, offsetof(Vertex, shearElasticStrain), 3, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(5, GL_FLOAT, offsetof(Vertex, maximumPrincipalStress), 1, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(6, GL_FLOAT, offsetof(Vertex, middlePrincipalStress), 1, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(7, GL_FLOAT, offsetof(Vertex, minimumPrincipalStress), 1, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(Vertex, normalStress), 3, sizeof(Vertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(Vertex, shearStress), 3, sizeof(Vertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(NodeVertex, totalDeformation), 1, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(2, GL_FLOAT, offsetof(NodeVertex, deformation), 3, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(3, GL_FLOAT, offsetof(NodeVertex, normalElasticStrain), 3, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(4, GL_FLOAT, offsetof(NodeVertex, shearElasticStrain), 3, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(5, GL_FLOAT, offsetof(NodeVertex, maximumPrincipalStress), 1, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(6, GL_FLOAT, offsetof(NodeVertex, middlePrincipalStress), 1, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(7, GL_FLOAT, offsetof(NodeVertex, minimumPrincipalStress), 1, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(NodeVertex, normalStress), 3, sizeof(NodeVertex));
+		shadedWireframeShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(NodeVertex, shearStress), 3, sizeof(NodeVertex));
 
 		shadedWireframeShaderProgram->setUniformValue("lineWidth", 0.5f);
 		shadedWireframeShaderProgram->setUniformValue("lineColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
@@ -235,8 +230,8 @@ void OpenGLWindow::initializeGL()
 		shadedWireframeShaderProgram->setUniformValue("minShearStress", valueRange.minShearStress);
 		shadedWireframeShaderProgram->setUniformValue("maxShearStress", valueRange.maxShearStress);
 
-		shadedWireframeShaderProgram->setUniformValue("planeOrigin", toVec3(plane.origin));
-		shadedWireframeShaderProgram->setUniformValue("planeNormal", toVec3(plane.normal));
+		shadedWireframeShaderProgram->setUniformValue("planeOrigin", QVector3D(0.0f, 0.0f, 0.0f));
+		shadedWireframeShaderProgram->setUniformValue("planeNormal", QVector3D(-1.0f, -1.0f, -1.0f).normalized());
 	}
 
 	// 创建截面相关渲染资源
@@ -313,8 +308,8 @@ void OpenGLWindow::paintGL()
 	//zoneVAO.bind();
 	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	faceVAO.bind();
-	glDrawElements(GL_TRIANGLES, faceIndices.count(), GL_UNSIGNED_INT, nullptr);
+	facetVAO.bind();
+	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionShaderProgram->bind();
 	sectionShaderProgram->setUniformValue("mvp", mvp);
@@ -353,139 +348,6 @@ void OpenGLWindow::keyReleaseEvent(QKeyEvent* event)
 {
     camera->onKeyReleased(event->key());
 }
-
-//void OpenGLWindow::loadDataFiles()
-//{
-//    // 加载模型网格数据
-//	QFile modelFile("asset/data/model001.f3grid");
-//	if (modelFile.open(QIODevice::ReadOnly))
-//	{
-//		QTextStream in(&modelFile);
-//		while (!in.atEnd())
-//		{
-//            QString header;
-//            in >> header;
-//            if (header == "G")
-//            {
-//				int index;
-//				Vertex vertex;
-//				in >> index >> vertex.position[0] >> vertex.position[1] >> vertex.position[2];
-//
-//				vertices.append(vertex);
-//            }
-//            else if (header == "Z")
-//            {
-//                Zone zone;
-//                QString type;
-//                int Index;
-//                in >> type >> Index;
-//
-//				if (type == "W6")
-//				{
-//					zone.type = W6;
-//					zone.num = 6;
-//				}
-//                else if (type == "B8")
-//                {
-//                    zone.type = B8;
-//                    zone.num = 8;
-//                }
-//                else
-//                {
-//                    qDebug() << "Unknown zone type: " << type;
-//                    return;
-//                }
-//
-//                for (int i = 0; i < zone.num; ++i)
-//                {
-//                    in >> zone.indices[i];
-//                    zone.indices[i] -= 1;
-//                }
-//
-//                zones.append(zone);
-//            }
-//            else if (header == "F")
-//            {
-//				Face face;
-//				QString type;
-//				int Index;
-//				in >> type >> Index;
-//
-//				if (type == "Q4")
-//				{
-//					face.type = Q4;
-//					face.num = 4;
-//				}
-//				else if (type == "T3")
-//				{
-//					face.type = T3;
-//					face.num = 3;
-//				}
-//				else
-//				{
-//					qDebug() << "Unknown zone type: " << type;
-//					return;
-//				}
-//
-//				for (int i = 0; i < face.num; ++i)
-//				{
-//					in >> face.indices[i];
-//					face.indices[i] -= 1;
-//				}
-//
-//				faces.append(face);
-//            }
-//			in.readLine();
-//		}
-//		modelFile.close();
-//	}
-//
-//	// 加载三向（XYZ）位移数据数据
-//	QFile gridFile("asset/data/gridpoint_result.txt");
-//    if (gridFile.open(QIODevice::ReadOnly))
-//    {
-//        QTextStream in(&gridFile);
-//        in.readLine();
-//        while (!in.atEnd())
-//        {
-//            int index;
-//            in >> index;
-//            index -= 1;
-//
-//            in >> vertices[index].displacement[0] >>
-//                vertices[index].displacement[1] >>
-//                vertices[index].displacement[2];
-//            in.readLine();
-//        }
-//
-//        gridFile.close();
-//    }
-//
-//	// 加载应力数据
-//	QFile sigForceFile("asset/data/zone_result.txt");
-//	if (sigForceFile.open(QIODevice::ReadOnly))
-//	{
-//		QTextStream in(&sigForceFile);
-//		in.readLine();
-//		while (!in.atEnd())
-//		{
-//			int index;
-//			in >> index;
-//			index -= 1;
-//
-//			in >> vertices[index].Sig123[0] >>
-//				vertices[index].Sig123[1] >>
-//				vertices[index].Sig123[2] >>
-//				vertices[index].SigXYZS[0] >>
-//				vertices[index].SigXYZS[1] >>
-//				vertices[index].SigXYZS[2] >>
-//				vertices[index].SigXYZS[3];
-//			in.readLine();
-//		}
-//
-//        sigForceFile.close();
-//	}
-//}
 
 bool OpenGLWindow::loadDatabase()
 {
@@ -583,7 +445,7 @@ bool OpenGLWindow::loadDatabase()
 	record = query.record();
 	while (query.next())
 	{
-		Vertex vertex;
+		NodeVertex vertex;
 		for (int i = 0; i < 3; ++i)
 		{
 			vertex.position[i] = query.value(i + 1).toFloat();
@@ -592,7 +454,6 @@ bool OpenGLWindow::loadDatabase()
 		boundingBox.min = qMinVec3(boundingBox.min, vertex.position);
 		boundingBox.max = qMaxVec3(boundingBox.max, vertex.position);
 		coords.push_back(toArr3(vertex.position));
-		mpiVertices.push_back(toArr3(vertex.position));
 
 		vertices.append(vertex);
 	}
@@ -602,14 +463,14 @@ bool OpenGLWindow::loadDatabase()
 	//record = query.record();
 	//while (query.next())
 	//{
-	//	Face face;
-	//	face.num = query.value(2).toInt();
-	//	for (int i = 0; i < face.num; ++i)
+	//	Face facet;
+	//	facet.num = query.value(2).toInt();
+	//	for (int i = 0; i < facet.num; ++i)
 	//	{
-	//		face.indices[i] = query.value(i + 3).toInt() - 1;
+	//		facet.indices[i] = query.value(i + 3).toInt() - 1;
 	//	}
 
-	//	faces.append(face);
+	//	facets.append(facet);
 	//}
 
 	// 查询模型所有外表面对应的节点索引信息
@@ -617,30 +478,27 @@ bool OpenGLWindow::loadDatabase()
 	record = query.record();
 	while (query.next())
 	{
-		Face face;
-		face.num = query.value(3).toInt();
-		for (int i = 0; i < face.num; ++i)
+		Facet facet;
+		facet.num = query.value(3).toInt();
+		for (int i = 0; i < facet.num; ++i)
 		{
-			face.indices[i] = query.value(i + 4).toInt() - 1;
+			facet.indices[i] = query.value(i + 4).toInt() - 1;
 		}
 
-		faces.append(face);
+		facets.append(facet);
 
-		if (face.num == 3)
+		if (facet.num == 3)
 		{
-			faceIndices.append({
-				face.indices[0], face.indices[1], face.indices[2]
+			facetIndices.append({
+				facet.indices[0], facet.indices[1], facet.indices[2]
 				});
-			mpiFaces.push_back({ (int)face.indices[0], (int)face.indices[1], (int)face.indices[2] });
 		}
-		else if (face.num == 4)
+		else if (facet.num == 4)
 		{
-			faceIndices.append({
-				face.indices[0], face.indices[2], face.indices[1],
-				face.indices[0], face.indices[3], face.indices[2]
+			facetIndices.append({
+				facet.indices[0], facet.indices[2], facet.indices[1],
+				facet.indices[0], facet.indices[3], facet.indices[2]
 				});
-			mpiFaces.push_back({ (int)face.indices[0], (int)face.indices[2], (int)face.indices[1] });
-			mpiFaces.push_back({ (int)face.indices[0], (int)face.indices[3], (int)face.indices[2] });
 		}
 	}
 
@@ -762,69 +620,28 @@ void OpenGLWindow::interpUniformGridData()
 
 void OpenGLWindow::clipExteriorSurface()
 {
-	mpiVertices.clear();
-	mpiFaces.clear();
-
-	profileTimer.start();
-	double latitudeBands = 1000;
-	double longitudeBands = 1000;
-	double radius = 200;
-	double pi = 3.1415926;
-	for (double latNumber = 0; latNumber <= latitudeBands; latNumber++) {
-		double theta = latNumber * pi / latitudeBands;
-		double sinTheta = sin(theta);
-		double cosTheta = cos(theta);
-
-		for (double longNumber = 0; longNumber <= longitudeBands; longNumber++) {
-			double phi = longNumber * 2 * pi / longitudeBands;
-			double sinPhi = sin(phi);
-			double cosPhi = cos(phi);
-
-			mpiVertices.push_back({ radius * cosPhi * sinTheta, radius * cosTheta, radius * sinPhi * sinTheta });
-		}
-
-		for (int latNum = 0; latNum < latitudeBands; latNum++) {
-			for (int longNum = 0; longNum < longitudeBands; longNum++) {
-				int first = (latNum * (longitudeBands + 1)) + longNum;
-				int second = first + longitudeBands + 1;
-				mpiFaces.push_back({ first, second, first + 1 });
-				mpiFaces.push_back({ second, second + 1, first + 1 });
-			}
-		}
-	}
-	
-	qDebug() << "Generate sphere:" << profileTimer.restart() << "ms";
-
-	Intersector::Mesh mesh(mpiVertices, mpiFaces);
-	plane.origin = { 0.0, 0.0, 0.0 };
-	plane.normal = toArr3(QVector3D(-1.0, -1.0, -1.0).normalized());
-	std::vector<Intersector::Path3D> paths = mesh.Clip(plane);
-
-	qDebug() << "Clip sphere:" << profileTimer.elapsed() << "ms";
-	//Q_ASSERT_X(paths.size() == 1 && !paths.front().isClosed, "clipExteriorSurface", "path size should be one and not closed!");
-
-	std::vector<Intersector::Path3D> pathss = { paths[0] };
-	for (const Intersector::Path3D& path : pathss)
+	QVector<ClipLine> clipLines;
+	for (const ClipLine& clipLine : clipLines)
 	{
 		SectionVertex center;
 		center.position = QVector3D(0.0f, 0.0f, 0.0f);
-		const auto& points = path.points;
-		uint32_t pointNum = (uint32_t)points.size();
-		for (size_t i = 0; i < pointNum; ++i)
+		const auto& vertices = clipLine.vertices;
+		uint32_t vertexNum = (uint32_t)vertices.count();
+		for (size_t i = 0; i < vertexNum; ++i)
 		{
-			center.position += toVec3(points[i]);
+			center.position += vertices[i].position;
 		}
-		center.position /= pointNum;
+		center.position /= vertexNum;
 		uint32_t baseIndex = sectionVertices.count();
 		sectionVertices.append(center);
 
-		for (uint32_t i = 0; i < pointNum; ++i)
+		for (uint32_t i = 0; i < vertexNum; ++i)
 		{
-			QVector3D current_position = toVec3(points[i]);
-			QVector3D next_position = toVec3(points[(i + 1) % pointNum]);
+			QVector3D current_position = vertices[i].position;
+			QVector3D next_position = vertices[(i + 1) % vertexNum].position;
 
 			sectionVertices.append(SectionVertex{ current_position });
-			sectionIndices.append({ baseIndex, baseIndex + i + 1, baseIndex + (i + 1) % pointNum + 1 });
+			sectionIndices.append({ baseIndex, baseIndex + i + 1, baseIndex + (i + 1) % vertexNum + 1 });
 		}
 	}
 
