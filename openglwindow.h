@@ -175,11 +175,13 @@ private:
     std::vector<std::array<double, 3>> coords;
     std::vector<double> values;
 
+    QOpenGLShaderProgram* nodeShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
     QOpenGLShaderProgram* shadedWireframeShaderProgram;
     QOpenGLShaderProgram* sectionShaderProgram;
 
     QOpenGLBuffer nodeVBO;
+    QOpenGLVertexArrayObject nodeVAO;
 
     QOpenGLVertexArrayObject wireframeVAO;
     QVector<GLuint> wireframeIndices;
@@ -202,6 +204,7 @@ private:
     class Camera* camera;
     QTimer updateTimer;
     QElapsedTimer elapsedTimer;
+    QElapsedTimer profileTimer;
 };
 
 #endif // OPENGLWINDOW_H

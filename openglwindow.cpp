@@ -69,10 +69,22 @@ void OpenGLWindow::initializeGL()
 	glGetIntegerv(GL_SMOOTH_LINE_WIDTH_RANGE, range);
     glLineWidth(range[1]);
 
+	glEnable(GL_POINT_SMOOTH);
+	glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+	glEnable(GL_PROGRAM_POINT_SIZE);
+
 	// 创建着色器程序
     {
+		nodeShaderProgram = new QOpenGLShaderProgram;
+		bool success = nodeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/node_vs.glsl");
+		Q_ASSERT_X(success, "nodeShaderProgram", qPrintable(nodeShaderProgram->log()));
+
+		success = nodeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/node_fs.glsl");
+		Q_ASSERT_X(success, "nodeShaderProgram", qPrintable(nodeShaderProgram->log()));
+		nodeShaderProgram->link();
+
 		wireframeShaderProgram = new QOpenGLShaderProgram;
-		bool success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
+		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
         Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
 
 		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/wireframe_fs.glsl");
@@ -97,16 +109,25 @@ void OpenGLWindow::initializeGL()
 		success = sectionShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/section_fs.glsl");
 		Q_ASSERT_X(success, "sectionShaderProgram", qPrintable(sectionShaderProgram->log()));
 		sectionShaderProgram->link();
-
-		qDebug() << "sectionShaderProgram" << sectionShaderProgram->log();
     }
 	
-	// create the vertex buffer object
+	// 创建基础节点顶点缓存对象
 	nodeVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
 	nodeVBO.create();
 	nodeVBO.bind();
 	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 	nodeVBO.allocate(vertices.constData(), vertices.count() * sizeof(Vertex));
+
+	// 创建基础节点相关渲染资源
+	{
+		nodeVAO.create();
+		nodeVAO.bind();
+		nodeVBO.bind();
+
+		nodeShaderProgram->bind();
+		nodeShaderProgram->enableAttributeArray(0);
+		nodeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(Vertex, position), 3, sizeof(Vertex));
+	}
 
     // 创建线框模式相关渲染资源
     {
@@ -300,6 +321,12 @@ void OpenGLWindow::paintGL()
 
 	sectionVAO.bind();
 	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	//nodeShaderProgram->bind();
+	//nodeShaderProgram->setUniformValue("mvp", mvp);
+
+	//nodeVAO.bind();
+	//glDrawArrays(GL_POINTS, 0, vertices.count());
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -738,8 +765,9 @@ void OpenGLWindow::clipExteriorSurface()
 	mpiVertices.clear();
 	mpiFaces.clear();
 
-	double latitudeBands = 30;
-	double longitudeBands = 30;
+	profileTimer.start();
+	double latitudeBands = 1000;
+	double longitudeBands = 1000;
 	double radius = 200;
 	double pi = 3.1415926;
 	for (double latNumber = 0; latNumber <= latitudeBands; latNumber++) {
@@ -764,11 +792,15 @@ void OpenGLWindow::clipExteriorSurface()
 			}
 		}
 	}
+	
+	qDebug() << "Generate sphere:" << profileTimer.restart() << "ms";
 
 	Intersector::Mesh mesh(mpiVertices, mpiFaces);
 	plane.origin = { 0.0, 0.0, 0.0 };
 	plane.normal = toArr3(QVector3D(-1.0, -1.0, -1.0).normalized());
 	std::vector<Intersector::Path3D> paths = mesh.Clip(plane);
+
+	qDebug() << "Clip sphere:" << profileTimer.elapsed() << "ms";
 	//Q_ASSERT_X(paths.size() == 1 && !paths.front().isClosed, "clipExteriorSurface", "path size should be one and not closed!");
 
 	std::vector<Intersector::Path3D> pathss = { paths[0] };
