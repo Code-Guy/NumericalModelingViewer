@@ -68,11 +68,11 @@ bool isOnFrontSideOfPlane(vec3 point)
 
 void main()
 {
-	if (!isOnFrontSideOfPlane(GPosition))
-	{
-		discard;
-		return;
-	}
+	// if (!isOnFrontSideOfPlane(GPosition))
+	// {
+	// 	discard;
+	// 	return;
+	// }
 
 	vec4 shadeColor = vec4(calcHeatmapColor(GTotalDeformation, minTotalDeformation, maxTotalDeformation), 1.0);
 

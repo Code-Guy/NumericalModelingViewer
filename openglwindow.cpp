@@ -14,7 +14,8 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
 
     // 加载数据
 	loadDatabase();
-	clipExteriorSurface();
+	//preprocess();
+	//clipExteriorSurface();
 	//interpUniformGridData();
 
     // 初始化摄像机
@@ -54,7 +55,7 @@ void OpenGLWindow::initializeGL()
     // 设置OGL状态
     glFrontFace(GL_CCW);
     glCullFace(GL_BACK);
-    //glEnable(GL_CULL_FACE);
+    glEnable(GL_CULL_FACE);
 
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
@@ -111,7 +112,7 @@ void OpenGLWindow::initializeGL()
 	nodeVBO.create();
 	nodeVBO.bind();
 	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-	nodeVBO.allocate(vertices.constData(), vertices.count() * sizeof(NodeVertex));
+	nodeVBO.allocate(nodeVertices.constData(), nodeVertices.count() * sizeof(NodeVertex));
 
 	// 创建基础节点相关渲染资源
 	{
@@ -136,7 +137,7 @@ void OpenGLWindow::initializeGL()
 		wireframeIBO.create();
 		wireframeIBO.bind();
 		wireframeIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		wireframeIBO.allocate(wireframeIndices.constData(), wireframeIndices.count() * sizeof(GLuint));
+		wireframeIBO.allocate(wireframeIndices.constData(), wireframeIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
 		wireframeShaderProgram->bind();
@@ -155,7 +156,7 @@ void OpenGLWindow::initializeGL()
 		zoneIBO.create();
 		zoneIBO.bind();
 		zoneIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(GLuint));
+		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
@@ -174,7 +175,7 @@ void OpenGLWindow::initializeGL()
 		facetIBO.create();
 		facetIBO.bind();
 		facetIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(GLuint));
+		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
 		shadedWireframeShaderProgram->bind();
@@ -250,7 +251,7 @@ void OpenGLWindow::initializeGL()
 		sectionIBO.create();
 		sectionIBO.bind();
 		sectionIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		sectionIBO.allocate(sectionIndices.constData(), sectionIndices.count() * sizeof(GLuint));
+		sectionIBO.allocate(sectionIndices.constData(), sectionIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
 		sectionShaderProgram->bind();
@@ -321,7 +322,7 @@ void OpenGLWindow::paintGL()
 	//nodeShaderProgram->setUniformValue("mvp", mvp);
 
 	//nodeVAO.bind();
-	//glDrawArrays(GL_POINTS, 0, vertices.count());
+	//glDrawArrays(GL_POINTS, 0, nodeVertices.count());
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -445,17 +446,18 @@ bool OpenGLWindow::loadDatabase()
 	record = query.record();
 	while (query.next())
 	{
-		NodeVertex vertex;
+		NodeVertex nodeVertex;
 		for (int i = 0; i < 3; ++i)
 		{
-			vertex.position[i] = query.value(i + 1).toFloat();
+			nodeVertex.position[i] = query.value(i + 1).toFloat();
 		}
 
-		boundingBox.min = qMinVec3(boundingBox.min, vertex.position);
-		boundingBox.max = qMaxVec3(boundingBox.max, vertex.position);
-		coords.push_back(toArr3(vertex.position));
+		boundingBox.min = qMinVec3(boundingBox.min, nodeVertex.position);
+		boundingBox.max = qMaxVec3(boundingBox.max, nodeVertex.position);
+		coords.push_back(toArr3(nodeVertex.position));
+		mesh.vertices.append(nodeVertex.position);
 
-		vertices.append(vertex);
+		nodeVertices.append(nodeVertex);
 	}
 
 	// 查询模型所有表面对应的节点索引信息
@@ -480,25 +482,55 @@ bool OpenGLWindow::loadDatabase()
 	{
 		Facet facet;
 		facet.num = query.value(3).toInt();
+		QSet<uint32_t> indexSet;
 		for (int i = 0; i < facet.num; ++i)
 		{
 			facet.indices[i] = query.value(i + 4).toInt() - 1;
+			indexSet.insert(facet.indices[i]);
 		}
 
+		if (indexSet.count() == 2)
+		{
+			continue;
+		}
+
+		if (indexSet.count() < facet.num && indexSet.count() == 3)
+		{
+			facet.num = 3;
+		}
 		facets.append(facet);
 
+		QVector<uint32_t> indices;
 		if (facet.num == 3)
 		{
-			facetIndices.append({
-				facet.indices[0], facet.indices[1], facet.indices[2]
-				});
+			indices.append({ facet.indices[0], facet.indices[1], facet.indices[2] });
 		}
 		else if (facet.num == 4)
 		{
-			facetIndices.append({
+			indices.append({
 				facet.indices[0], facet.indices[2], facet.indices[1],
 				facet.indices[0], facet.indices[3], facet.indices[2]
 				});
+		}
+
+		facetIndices.append(indices);
+		for (int i = 0; i < indices.count(); i += 3)
+		{
+			uint32_t v0 = indices[i];
+			uint32_t v1 = indices[i + 1];
+			uint32_t v2 = indices[i + 2];
+
+			uint32_t faceIndex = mesh.faces.count();
+			mesh.faces.append(Face{ v0, v1, v2 });
+			Face& face = mesh.faces.back();
+
+			Edge edges[3] = { { v0, v1 }, { v1, v2 }, { v0, v2 } };
+			for (int j = 0; j < 3; ++j)
+			{
+				Edge& edge = edges[j];
+				face.edges[j] = edge;
+				mesh.edges[edge].append(faceIndex);
+			}
 		}
 	}
 
@@ -508,58 +540,58 @@ bool OpenGLWindow::loadDatabase()
 	while (query.next())
 	{
 		int index = query.value(0).toInt() - 1;
-		vertices[index].totalDeformation = query.value(1).toFloat();
-		valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, vertices[index].totalDeformation);
-		valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, vertices[index].totalDeformation);
-		values.push_back(vertices[index].totalDeformation);
+		nodeVertices[index].totalDeformation = query.value(1).toFloat();
+		valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, nodeVertices[index].totalDeformation);
+		valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, nodeVertices[index].totalDeformation);
+		values.push_back(nodeVertices[index].totalDeformation);
 
 		int i = 2;
 		for (int j = 0; j < 3; ++j)
 		{
-			vertices[index].deformation[j] = query.value(i++).toFloat();
+			nodeVertices[index].deformation[j] = query.value(i++).toFloat();
 		}
-		valueRange.minDeformation = qMinVec3(valueRange.minDeformation, vertices[index].deformation);
-		valueRange.maxDeformation = qMaxVec3(valueRange.maxDeformation, vertices[index].deformation);
+		valueRange.minDeformation = qMinVec3(valueRange.minDeformation, nodeVertices[index].deformation);
+		valueRange.maxDeformation = qMaxVec3(valueRange.maxDeformation, nodeVertices[index].deformation);
 
 		for (int j = 0; j < 3; ++j)
 		{
-			vertices[index].normalElasticStrain[j] = query.value(i++).toFloat();
+			nodeVertices[index].normalElasticStrain[j] = query.value(i++).toFloat();
 		}
-		valueRange.minNormalElasticStrain = qMinVec3(valueRange.minNormalElasticStrain, vertices[index].normalElasticStrain);
-		valueRange.maxNormalElasticStrain = qMaxVec3(valueRange.maxNormalElasticStrain, vertices[index].normalElasticStrain);
+		valueRange.minNormalElasticStrain = qMinVec3(valueRange.minNormalElasticStrain, nodeVertices[index].normalElasticStrain);
+		valueRange.maxNormalElasticStrain = qMaxVec3(valueRange.maxNormalElasticStrain, nodeVertices[index].normalElasticStrain);
 
 		for (int j = 0; j < 3; ++j)
 		{
-			vertices[index].shearElasticStrain[j] = query.value(i++).toFloat();
+			nodeVertices[index].shearElasticStrain[j] = query.value(i++).toFloat();
 		}
-		valueRange.minShearElasticStrain = qMinVec3(valueRange.minShearElasticStrain, vertices[index].shearElasticStrain);
-		valueRange.maxShearElasticStrain = qMaxVec3(valueRange.maxShearElasticStrain, vertices[index].shearElasticStrain);
+		valueRange.minShearElasticStrain = qMinVec3(valueRange.minShearElasticStrain, nodeVertices[index].shearElasticStrain);
+		valueRange.maxShearElasticStrain = qMaxVec3(valueRange.maxShearElasticStrain, nodeVertices[index].shearElasticStrain);
 
-		vertices[index].maximumPrincipalStress = query.value(i++).toFloat();
-		valueRange.minMaximumPrincipalStress = qMin(valueRange.minMaximumPrincipalStress, vertices[index].maximumPrincipalStress);
-		valueRange.maxMaximumPrincipalStress = qMax(valueRange.maxMaximumPrincipalStress, vertices[index].maximumPrincipalStress);
+		nodeVertices[index].maximumPrincipalStress = query.value(i++).toFloat();
+		valueRange.minMaximumPrincipalStress = qMin(valueRange.minMaximumPrincipalStress, nodeVertices[index].maximumPrincipalStress);
+		valueRange.maxMaximumPrincipalStress = qMax(valueRange.maxMaximumPrincipalStress, nodeVertices[index].maximumPrincipalStress);
 
-		vertices[index].middlePrincipalStress = query.value(i++).toFloat();
-		valueRange.minMiddlePrincipalStress = qMin(valueRange.minMiddlePrincipalStress, vertices[index].middlePrincipalStress);
-		valueRange.maxMiddlePrincipalStress = qMax(valueRange.maxMiddlePrincipalStress, vertices[index].middlePrincipalStress);
+		nodeVertices[index].middlePrincipalStress = query.value(i++).toFloat();
+		valueRange.minMiddlePrincipalStress = qMin(valueRange.minMiddlePrincipalStress, nodeVertices[index].middlePrincipalStress);
+		valueRange.maxMiddlePrincipalStress = qMax(valueRange.maxMiddlePrincipalStress, nodeVertices[index].middlePrincipalStress);
 
-		vertices[index].minimumPrincipalStress = query.value(i++).toFloat();
-		valueRange.minMinimumPrincipalStress = qMin(valueRange.minMinimumPrincipalStress, vertices[index].minimumPrincipalStress);
-		valueRange.maxMinimumPrincipalStress = qMax(valueRange.maxMinimumPrincipalStress, vertices[index].minimumPrincipalStress);
+		nodeVertices[index].minimumPrincipalStress = query.value(i++).toFloat();
+		valueRange.minMinimumPrincipalStress = qMin(valueRange.minMinimumPrincipalStress, nodeVertices[index].minimumPrincipalStress);
+		valueRange.maxMinimumPrincipalStress = qMax(valueRange.maxMinimumPrincipalStress, nodeVertices[index].minimumPrincipalStress);
 
 		for (int j = 0; j < 3; ++j)
 		{
-			vertices[index].normalStress[j] = query.value(i++).toFloat();
+			nodeVertices[index].normalStress[j] = query.value(i++).toFloat();
 		}
-		valueRange.minNormalStress = qMinVec3(valueRange.minNormalStress, vertices[index].normalStress);
-		valueRange.maxNormalStress = qMaxVec3(valueRange.maxNormalStress, vertices[index].normalStress);
+		valueRange.minNormalStress = qMinVec3(valueRange.minNormalStress, nodeVertices[index].normalStress);
+		valueRange.maxNormalStress = qMaxVec3(valueRange.maxNormalStress, nodeVertices[index].normalStress);
 
 		for (int j = 0; j < 3; ++j)
 		{
-			vertices[index].shearStress[j] = query.value(i++).toFloat();
+			nodeVertices[index].shearStress[j] = query.value(i++).toFloat();
 		}
-		valueRange.minShearStress = qMinVec3(valueRange.minShearStress, vertices[index].shearStress);
-		valueRange.maxShearStress = qMaxVec3(valueRange.maxShearStress, vertices[index].shearStress);
+		valueRange.minShearStress = qMinVec3(valueRange.minShearStress, nodeVertices[index].shearStress);
+		valueRange.maxShearStress = qMaxVec3(valueRange.maxShearStress, nodeVertices[index].shearStress);
 	}
 
 	// 查询计算结果类型、名称
@@ -577,6 +609,19 @@ bool OpenGLWindow::loadDatabase()
 	//}
 
 	return true;
+}
+
+void OpenGLWindow::preprocess()
+{
+	GeoUtil::fixWindingOrder(mesh);
+
+	for (int i = 0; i < mesh.faces.count(); ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			facetIndices[i * 3 + j] = mesh.faces[i].vertices[j];
+		}
+	}
 }
 
 void OpenGLWindow::interpUniformGridData()
@@ -629,7 +674,7 @@ void OpenGLWindow::clipExteriorSurface()
 		uint32_t vertexNum = (uint32_t)vertices.count();
 		for (size_t i = 0; i < vertexNum; ++i)
 		{
-			center.position += vertices[i].position;
+			center.position += vertices[i];
 		}
 		center.position /= vertexNum;
 		uint32_t baseIndex = sectionVertices.count();
@@ -637,8 +682,8 @@ void OpenGLWindow::clipExteriorSurface()
 
 		for (uint32_t i = 0; i < vertexNum; ++i)
 		{
-			QVector3D current_position = vertices[i].position;
-			QVector3D next_position = vertices[(i + 1) % vertexNum].position;
+			QVector3D current_position = vertices[i];
+			QVector3D next_position = vertices[(i + 1) % vertexNum];
 
 			sectionVertices.append(SectionVertex{ current_position });
 			sectionIndices.append({ baseIndex, baseIndex + i + 1, baseIndex + (i + 1) % vertexNum + 1 });

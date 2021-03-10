@@ -13,7 +13,6 @@
 #include <QElapsedTimer>
 #include <QTimer>
 #include <vector>
-#include <array>
 #include <mba/mba.hpp>
 
 #include "geoutil.h"
@@ -118,6 +117,7 @@ protected:
 
 private:
     bool loadDatabase();
+	void preprocess();
     void interpUniformGridData();
     void clipExteriorSurface();
 
@@ -133,15 +133,16 @@ private:
     QVector3D toVec3(const std::array<double, 3>& arr3);
     std::array<double, 3> toArr3(const QVector3D& vec3);
 
-    QVector<NodeVertex> vertices;
+    QVector<NodeVertex> nodeVertices;
     QVector<Facet> facets;
 
+	Mesh mesh;
     QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
 
     BoundingBox boundingBox;
-    std::vector<std::array<double, 3>> coords;
+    std::vector<mba::point<3>> coords;
     std::vector<double> values;
 
     QOpenGLShaderProgram* nodeShaderProgram;
@@ -153,21 +154,21 @@ private:
     QOpenGLVertexArrayObject nodeVAO;
 
     QOpenGLVertexArrayObject wireframeVAO;
-    QVector<GLuint> wireframeIndices;
+    QVector<uint32_t> wireframeIndices;
     QOpenGLBuffer wireframeIBO;
 
 	QOpenGLVertexArrayObject zoneVAO;
-	QVector<GLuint> zoneIndices;
+	QVector<uint32_t> zoneIndices;
 	QOpenGLBuffer zoneIBO;
 
 	QOpenGLVertexArrayObject facetVAO;
-	QVector<GLuint> facetIndices;
+	QVector<uint32_t> facetIndices;
 	QOpenGLBuffer facetIBO;
 
     QOpenGLBuffer sectionVBO;
 	QOpenGLVertexArrayObject sectionVAO;
     QVector<SectionVertex> sectionVertices;
-	QVector<GLuint> sectionIndices;
+	QVector<uint32_t> sectionIndices;
 	QOpenGLBuffer sectionIBO;
 
     class Camera* camera;
