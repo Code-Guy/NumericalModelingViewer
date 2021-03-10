@@ -83,6 +83,6 @@ void main()
 	FColor = mix(lineColor, shadeColor, mixVal);
 
 	// gamma correction
-	// float gamma = 2.2;
-	// FColor.rgb = pow(FColor.rgb, vec3(1.0 / gamma));
+	float gamma = 2.2;
+	FColor.rgb = pow(FColor.rgb, vec3(1.0 / gamma));
 }

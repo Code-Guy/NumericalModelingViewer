@@ -14,7 +14,7 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
 
     // 加载数据
 	loadDatabase();
-	//preprocess();
+	preprocess();
 	//clipExteriorSurface();
 	//interpUniformGridData();
 
@@ -530,6 +530,11 @@ bool OpenGLWindow::loadDatabase()
 				Edge& edge = edges[j];
 				face.edges[j] = edge;
 				mesh.edges[edge].append(faceIndex);
+
+				if (edge == Edge{ 13761, 12153 })
+				{
+					qDebug() << v0 << v1 << v2;
+				}
 			}
 		}
 	}
@@ -615,6 +620,7 @@ void OpenGLWindow::preprocess()
 {
 	GeoUtil::fixWindingOrder(mesh);
 
+	facetIndices.resize(mesh.faces.count() * 3);
 	for (int i = 0; i < mesh.faces.count(); ++i)
 	{
 		for (int j = 0; j < 3; ++j)
@@ -622,6 +628,24 @@ void OpenGLWindow::preprocess()
 			facetIndices[i * 3 + j] = mesh.faces[i].vertices[j];
 		}
 	}
+
+	// 验证模型的封闭性
+	bool closed = true;
+	int num = 0;
+	for (const Face& face : mesh.faces)
+	{
+		for (const Edge& edge : face.edges)
+		{
+			const auto& faces = mesh.edges[edge];
+			if (faces.count() != 2)
+			{
+				closed = false;
+				num++;
+			}
+		}
+	}
+
+	Q_ASSERT_X(closed, "preprocess", "mesh must be closed!");
 }
 
 void OpenGLWindow::interpUniformGridData()

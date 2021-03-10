@@ -8,7 +8,7 @@
 
 const float kMaxVal = 1e8f;
 const float kMinVal = -kMaxVal;
-const uint32_t kInvalidIndex = 1e8;
+const int kInvalidIndex = -1;
 const QVector3D kMaxVec3 = QVector3D(kMaxVal, kMaxVal, kMaxVal);
 const QVector3D kMinVec3 = QVector3D(kMinVal, kMinVal, kMinVal);
 
@@ -50,6 +50,7 @@ struct Plane
 {
 	QVector3D origin;
 	QVector3D normal;
+	float d;
 };
 
 struct ClipLine
@@ -81,8 +82,10 @@ class GeoUtil
 {
 public:
 	static void fixWindingOrder(Mesh& mesh);
-	static QVector<ClipLine> clipMesh(const Mesh& mesh, const Plane& plane);
+	static QVector<ClipLine> clipMesh(Mesh& mesh, const Plane& plane);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);
+	static void flipWindingOrder(Face& face);
+	static bool clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection);
 };
