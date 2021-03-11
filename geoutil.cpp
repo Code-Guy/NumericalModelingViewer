@@ -1,8 +1,52 @@
 #include "geoutil.h"
 #include <QQueue>
 
+void GeoUtil::cleanMesh(Mesh& mesh)
+{
+	traverseMesh(mesh);
+
+	// 删除不合法（重复 || 孤立 || 非流形）面
+	QSet<Face> uniqueFaces;
+	QVector<Face> invalidFaces;
+	QVector<Face> validFaces;
+	QMap<Edge, QVector<uint32_t>> validEdges;
+	int validFaceIndex = 0;
+
+	for (int i = 0; i < mesh.faces.count(); ++i)
+	{
+		Face& face = mesh.faces[i];
+		bool existed = uniqueFaces.contains(face);
+		if (!existed)
+		{
+			uniqueFaces.insert(face);
+		}
+
+		if (existed || !face.visited || !checkManifordFace(mesh, face))
+		{
+			invalidFaces.append(face);
+		}
+		else
+		{
+			for (Edge& edge : face.edges)
+			{
+				validEdges[edge].append(validFaceIndex);
+			}
+
+			validFaces.append(face);
+			validFaceIndex++;
+		}
+	}
+
+	//mesh.faces = invalidFaces;
+	mesh.faces = validFaces;
+	mesh.edges = validEdges;
+}
+
 void GeoUtil::fixWindingOrder(Mesh& mesh)
 {
+	// 重置被访问属性
+	resetMeshVisited(mesh);
+
 	QQueue<uint32_t> queue;
 	queue.enqueue(0);
 	flipWindingOrder(mesh.faces[0]);
@@ -25,23 +69,6 @@ void GeoUtil::fixWindingOrder(Mesh& mesh)
 			}
 		}
 	}
-
-	QVector<Face> isolatedFaces;
-	QVector<Face> linkedFaces;
-	for (const Face& face : mesh.faces)
-	{
-		if (!face.visited)
-		{
-			isolatedFaces.append(face);
-		}
-		else
-		{
-			linkedFaces.append(face);
-		}
-	}
-
-	//mesh.faces = isolatedFaces;
-	mesh.faces = linkedFaces;
 }
 
 QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
@@ -142,5 +169,85 @@ bool GeoUtil::clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, Q
 	}
 
 	intersection = v0 + v01 * t;
+	return true;
+}
+
+bool GeoUtil::checkManifordFace(const Mesh& mesh, const Face& face, bool strict)
+{
+	for (const Edge& edge : face.edges)
+	{
+		const auto& faces = mesh.edges[edge];
+		if (faces.count() != 2 && (strict || faces.count() != 1))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+void GeoUtil::traverseMesh(Mesh& mesh)
+{
+	// 重置被访问属性
+	resetMeshVisited(mesh);
+
+	// 广度优先搜索所有面
+	QQueue<uint32_t> queue;
+	queue.enqueue(0);
+	mesh.faces[0].visited = true;
+
+	while (!queue.isEmpty())
+	{
+		const Face& mainFace = mesh.faces[queue.dequeue()];
+		for (const Edge& edge : mainFace.edges)
+		{
+			for (uint32_t f : mesh.edges[edge])
+			{
+				Face& neighborFace = mesh.faces[f];
+				if (!neighborFace.visited)
+				{
+					neighborFace.visited = true;
+					queue.enqueue(f);
+				}
+			}
+		}
+	}
+}
+
+void GeoUtil::resetMeshVisited(Mesh& mesh)
+{
+	for (Face& face : mesh.faces)
+	{
+		face.visited = false;
+	}
+}
+
+bool GeoUtil::checkValidMesh(Mesh& mesh)
+{
+	traverseMesh(mesh);
+
+	QSet<Face> uniqueFaces;
+	for (Face& face : mesh.faces)
+	{
+		uniqueFaces.insert(face);
+
+		// 检测连通性
+		if (!face.visited)
+		{
+			return false;
+		}
+
+		// 检测流形
+		if (!checkManifordFace(mesh, face))
+		{
+			return false;
+		}
+	}
+
+	// 检测重复
+	if (uniqueFaces.count() != mesh.faces.count())
+	{
+		return false;
+	}
+
 	return true;
 }

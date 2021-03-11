@@ -528,13 +528,17 @@ bool OpenGLWindow::loadDatabase()
 			for (int j = 0; j < 3; ++j)
 			{
 				Edge& edge = edges[j];
-				face.edges[j] = edge;
-				mesh.edges[edge].append(faceIndex);
-
-				if (edge == Edge{ 13761, 12153 })
+				auto iter = mesh.edges.find(edge);
+				if (iter == mesh.edges.end())
 				{
-					qDebug() << v0 << v1 << v2;
+					mesh.edges.insert(edge, { faceIndex });
 				}
+				else
+				{
+					edge = iter.key();
+					iter.value().append(faceIndex);
+				}
+				face.edges[j] = edge;
 			}
 		}
 	}
@@ -618,7 +622,10 @@ bool OpenGLWindow::loadDatabase()
 
 void OpenGLWindow::preprocess()
 {
+	GeoUtil::cleanMesh(mesh);
 	GeoUtil::fixWindingOrder(mesh);
+	bool result = GeoUtil::checkValidMesh(mesh);
+	Q_ASSERT_X(result, "preprocess", "mesh is not valid!");
 
 	facetIndices.resize(mesh.faces.count() * 3);
 	for (int i = 0; i < mesh.faces.count(); ++i)
@@ -628,24 +635,6 @@ void OpenGLWindow::preprocess()
 			facetIndices[i * 3 + j] = mesh.faces[i].vertices[j];
 		}
 	}
-
-	// 验证模型的封闭性
-	bool closed = true;
-	int num = 0;
-	for (const Face& face : mesh.faces)
-	{
-		for (const Edge& edge : face.edges)
-		{
-			const auto& faces = mesh.edges[edge];
-			if (faces.count() != 2)
-			{
-				closed = false;
-				num++;
-			}
-		}
-	}
-
-	Q_ASSERT_X(closed, "preprocess", "mesh must be closed!");
 }
 
 void OpenGLWindow::interpUniformGridData()
