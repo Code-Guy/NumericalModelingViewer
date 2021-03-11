@@ -21,7 +21,7 @@ void GeoUtil::cleanMesh(Mesh& mesh)
 			uniqueFaces.insert(face);
 		}
 
-		if (existed || !face.visited || !checkManifordFace(mesh, face))
+		if (existed || !face.visited || !isManifordFace(mesh, face))
 		{
 			invalidFaces.append(face);
 		}
@@ -73,17 +73,13 @@ void GeoUtil::fixWindingOrder(Mesh& mesh)
 
 QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 {
-	QVector<ClipLine> polylines;
-
-	for (Face& face : mesh.faces)
-	{
-		face.visited = false;
-	}
+	QVector<ClipLine> clipLines;
+	resetMeshVisited(mesh);
 
 	while (true)
 	{
-		Edge clippedEdge;
-		bool findClippedEdge = false;
+		ClipLine clipLine;
+		QVector<QPair<Edge, QVector3D>> result;
 		for (Face& face : mesh.faces)
 		{
 			if (face.visited)
@@ -91,43 +87,65 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 				continue;
 			}
 
-			for (const Edge& edge : face.edges)
+			if (clipFace(mesh, face, plane, result))
 			{
-				QVector3D intersection;
-				if (clipEdge(mesh, edge, plane, intersection))
-				{
-					face.visited = true;
-					clippedEdge = edge;
-					break;
-				}
-			}
-
-			if (findClippedEdge)
-			{
+				face.visited = true;
 				break;
 			}
 		}
 
-		if (!findClippedEdge)
+		if (result.isEmpty())
 		{
 			break;
 		}
+		Q_ASSERT_X(result.count() == 2, "clipFace", "clip face must have two intersections!");
+
+		for (const auto& pair : result)
+		{
+			clipLine.vertices.append(pair.second);
+		}
+		Edge clippedEdge = result.last().first;
 
 		while (true)
 		{
+			uint32_t nextFaceIndex = kInvalidIndex;
+			for (uint32_t f : mesh.edges[clippedEdge])
+			{
+				if (!mesh.faces[f].visited)
+				{
+					nextFaceIndex = f;
+					break;
+				}
+			}
 			
+			if (nextFaceIndex == kInvalidIndex)
+			{
+				break;
+			}
+
+			Face& nextFace = mesh.faces[nextFaceIndex];
+			nextFace.visited = true;
+			for (const Edge& edge : nextFace.edges)
+			{
+				if (edge == clippedEdge)
+				{
+					continue;
+				}
+
+				QVector3D intersection;
+				if (clipEdge(mesh, edge, plane, intersection))
+				{
+					clippedEdge = edge;
+					clipLine.vertices.append(intersection);
+					break;
+				}
+			}
 		}
+
+		clipLines.append(clipLine);
 	}
 
-	QQueue<uint32_t> queue;
-	queue.enqueue(0);
-	while (!queue.isEmpty())
-	{
-		const Face& mainFace = mesh.faces[queue.dequeue()];
-
-	}
-
-	return polylines;
+	return clipLines;
 }
 
 void GeoUtil::fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace)
@@ -151,6 +169,29 @@ void GeoUtil::flipWindingOrder(Face& face)
 	qSwap(face.vertices[0], face.vertices[1]);
 }
 
+bool GeoUtil::clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QVector<QPair<Edge, QVector3D>>& result)
+{
+	for (const Edge& edge : face.edges)
+	{
+		bool boundaryEdge = isBoundaryEdge(mesh, edge);
+		QVector3D intersection;
+		if (clipEdge(mesh, edge, plane, intersection))
+		{
+			QPair<Edge, QVector3D> pair{ edge, intersection };
+			if (boundaryEdge)
+			{
+				result.insert(0, pair);
+			}
+			else
+			{
+				result.append(pair);
+			}
+		}
+	}
+
+	return result.isEmpty();
+}
+
 bool GeoUtil::clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection)
 {
 	QVector3D v0 = mesh.vertices[edge.vertices[0]];
@@ -172,7 +213,7 @@ bool GeoUtil::clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, Q
 	return true;
 }
 
-bool GeoUtil::checkManifordFace(const Mesh& mesh, const Face& face, bool strict)
+bool GeoUtil::isManifordFace(const Mesh& mesh, const Face& face, bool strict)
 {
 	for (const Edge& edge : face.edges)
 	{
@@ -183,6 +224,11 @@ bool GeoUtil::checkManifordFace(const Mesh& mesh, const Face& face, bool strict)
 		}
 	}
 	return true;
+}
+
+bool GeoUtil::isBoundaryEdge(const Mesh& mesh, const Edge& edge)
+{
+	return mesh.edges[edge].count() == 1;
 }
 
 void GeoUtil::traverseMesh(Mesh& mesh)
@@ -221,7 +267,7 @@ void GeoUtil::resetMeshVisited(Mesh& mesh)
 	}
 }
 
-bool GeoUtil::checkValidMesh(Mesh& mesh)
+bool GeoUtil::validateMesh(Mesh& mesh)
 {
 	traverseMesh(mesh);
 
@@ -237,7 +283,7 @@ bool GeoUtil::checkValidMesh(Mesh& mesh)
 		}
 
 		// ¼ì²âÁ÷ÐÎ
-		if (!checkManifordFace(mesh, face))
+		if (!isManifordFace(mesh, face, false))
 		{
 			return false;
 		}

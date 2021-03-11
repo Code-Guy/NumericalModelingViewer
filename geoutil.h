@@ -8,7 +8,7 @@
 
 const float kMaxVal = 1e8f;
 const float kMinVal = -kMaxVal;
-const int kInvalidIndex = -1;
+const uint32_t kInvalidIndex = 1e8;
 const QVector3D kMaxVec3 = QVector3D(kMaxVal, kMaxVal, kMaxVal);
 const QVector3D kMinVec3 = QVector3D(kMinVal, kMinVal, kMinVal);
 
@@ -116,13 +116,15 @@ public:
 	static void cleanMesh(Mesh& mesh);
 	static void fixWindingOrder(Mesh& mesh);
 	static QVector<ClipLine> clipMesh(Mesh& mesh, const Plane& plane);
-	static bool checkValidMesh(Mesh& mesh);
+	static bool validateMesh(Mesh& mesh);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);
 	static void flipWindingOrder(Face& face);
+	static bool clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QVector<QPair<Edge, QVector3D>>& result);
 	static bool clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection);
-	static bool checkManifordFace(const Mesh& mesh, const Face& face, bool strict = true);
+	static bool isManifordFace(const Mesh& mesh, const Face& face, bool strict = true);
+	static bool isBoundaryEdge(const Mesh& mesh, const Edge& edge);
 	static void traverseMesh(Mesh& mesh);
 	static void resetMeshVisited(Mesh& mesh);
 };

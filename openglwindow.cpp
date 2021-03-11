@@ -15,7 +15,7 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
     // 加载数据
 	loadDatabase();
 	preprocess();
-	//clipExteriorSurface();
+	clipExteriorSurface();
 	//interpUniformGridData();
 
     // 初始化摄像机
@@ -231,8 +231,8 @@ void OpenGLWindow::initializeGL()
 		shadedWireframeShaderProgram->setUniformValue("minShearStress", valueRange.minShearStress);
 		shadedWireframeShaderProgram->setUniformValue("maxShearStress", valueRange.maxShearStress);
 
-		shadedWireframeShaderProgram->setUniformValue("planeOrigin", QVector3D(0.0f, 0.0f, 0.0f));
-		shadedWireframeShaderProgram->setUniformValue("planeNormal", QVector3D(-1.0f, -1.0f, -1.0f).normalized());
+		shadedWireframeShaderProgram->setUniformValue("planeOrigin", plane.origin);
+		shadedWireframeShaderProgram->setUniformValue("planeNormal", plane.normal);
 	}
 
 	// 创建截面相关渲染资源
@@ -624,7 +624,7 @@ void OpenGLWindow::preprocess()
 {
 	GeoUtil::cleanMesh(mesh);
 	GeoUtil::fixWindingOrder(mesh);
-	bool result = GeoUtil::checkValidMesh(mesh);
+	bool result = GeoUtil::validateMesh(mesh);
 	Q_ASSERT_X(result, "preprocess", "mesh is not valid!");
 
 	facetIndices.resize(mesh.faces.count() * 3);
@@ -678,7 +678,11 @@ void OpenGLWindow::interpUniformGridData()
 
 void OpenGLWindow::clipExteriorSurface()
 {
-	QVector<ClipLine> clipLines;
+	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
+	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
+	plane.d = QVector3D::dotProduct(plane.origin, plane.normal);
+
+	QVector<ClipLine> clipLines = GeoUtil::clipMesh(mesh, plane);
 	for (const ClipLine& clipLine : clipLines)
 	{
 		SectionVertex center;

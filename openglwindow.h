@@ -144,6 +144,7 @@ private:
     BoundingBox boundingBox;
     std::vector<mba::point<3>> coords;
     std::vector<double> values;
+	Plane plane;
 
     QOpenGLShaderProgram* nodeShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
