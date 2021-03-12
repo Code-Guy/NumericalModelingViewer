@@ -1,4 +1,4 @@
-#version 330
+#version 420
 
 in vec3 GPosition;
 in float GTotalDeformation;
