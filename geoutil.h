@@ -2,6 +2,7 @@
 
 #include <QMatrix4x4>
 #include <QVector>
+#include <QList>
 #include <QSet>
 #include <QMap>
 #include <array>
@@ -87,7 +88,7 @@ struct Plane
 
 struct ClipLine
 {
-	QVector<QVector3D> vertices;
+	QList<QVector3D> vertices;
 };
 
 struct Mesh
@@ -121,7 +122,7 @@ public:
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);
 	static void flipWindingOrder(Face& face);
-	static bool clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QVector<QPair<Edge, QVector3D>>& result);
+	static bool clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QPair<Edge, QVector3D>& hit, const Edge* exceptEdge = nullptr, bool exceptBoundaryEdge = true);
 	static bool clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection);
 	static bool isManifordFace(const Mesh& mesh, const Face& face, bool strict = true);
 	static bool isBoundaryEdge(const Mesh& mesh, const Edge& edge);

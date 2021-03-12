@@ -79,7 +79,8 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 	while (true)
 	{
 		ClipLine clipLine;
-		QVector<QPair<Edge, QVector3D>> result;
+		Edge startEdge;
+		QPair<Edge, QVector3D> hit;
 		for (Face& face : mesh.faces)
 		{
 			if (face.visited)
@@ -87,57 +88,54 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 				continue;
 			}
 
-			if (clipFace(mesh, face, plane, result))
+			if (clipFace(mesh, face, plane, hit))
 			{
-				face.visited = true;
+				startEdge = hit.first;
+				clipLine.vertices.append(hit.second);
 				break;
 			}
 		}
 
-		if (result.isEmpty())
+		if (clipLine.vertices.isEmpty())
 		{
 			break;
 		}
-		Q_ASSERT_X(result.count() == 2, "clipFace", "clip face must have two intersections!");
 
-		for (const auto& pair : result)
+		QQueue<QPair<Edge, bool>> queue;
+		queue.enqueue({ startEdge, true });
+		while (!queue.isEmpty())
 		{
-			clipLine.vertices.append(pair.second);
-		}
-		Edge clippedEdge = result.last().first;
-
-		while (true)
-		{
-			uint32_t nextFaceIndex = kInvalidIndex;
-			for (uint32_t f : mesh.edges[clippedEdge])
+			QPair<Edge, bool> pair = queue.dequeue();
+			const Edge& edge = pair.first;
+			bool positive = pair.second;
+			for (uint32_t f : mesh.edges[edge])
 			{
-				if (!mesh.faces[f].visited)
+				Face& face = mesh.faces[f];
+				if (!face.visited)
 				{
-					nextFaceIndex = f;
-					break;
-				}
-			}
-			
-			if (nextFaceIndex == kInvalidIndex)
-			{
-				break;
-			}
+					face.visited = true;
+					if (clipFace(mesh, face, plane, hit, &edge, false))
+					{
+						const Edge& edge = hit.first;
+						const QVector3D& intersection = hit.second;
+						if (positive)
+						{
+							if (intersection.distanceToPoint(clipLine.vertices.back()) > 0.001f)
+							{
+								clipLine.vertices.push_back(intersection);
+							}
+						}
+						else
+						{
+							if (intersection.distanceToPoint(clipLine.vertices.front()) > 0.001f)
+							{
+								clipLine.vertices.push_front(intersection);
+							}
+						}
 
-			Face& nextFace = mesh.faces[nextFaceIndex];
-			nextFace.visited = true;
-			for (const Edge& edge : nextFace.edges)
-			{
-				if (edge == clippedEdge)
-				{
-					continue;
-				}
-
-				QVector3D intersection;
-				if (clipEdge(mesh, edge, plane, intersection))
-				{
-					clippedEdge = edge;
-					clipLine.vertices.append(intersection);
-					break;
+						queue.enqueue({ edge, positive });
+						positive = !positive;
+					}
 				}
 			}
 		}
@@ -169,27 +167,23 @@ void GeoUtil::flipWindingOrder(Face& face)
 	qSwap(face.vertices[0], face.vertices[1]);
 }
 
-bool GeoUtil::clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QVector<QPair<Edge, QVector3D>>& result)
+bool GeoUtil::clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QPair<Edge, QVector3D>& hit, const Edge* exceptEdge /*= nullptr*/, bool exceptBoundaryEdge /*= true*/)
 {
 	for (const Edge& edge : face.edges)
 	{
-		bool boundaryEdge = isBoundaryEdge(mesh, edge);
+		if ((exceptEdge && edge == *exceptEdge) || (isBoundaryEdge(mesh, edge) && exceptBoundaryEdge))
+		{
+			continue;
+		}
+
 		QVector3D intersection;
 		if (clipEdge(mesh, edge, plane, intersection))
 		{
-			QPair<Edge, QVector3D> pair{ edge, intersection };
-			if (boundaryEdge)
-			{
-				result.insert(0, pair);
-			}
-			else
-			{
-				result.append(pair);
-			}
+			hit = { edge, intersection };
+			return true;
 		}
 	}
-
-	return result.isEmpty();
+	return false;
 }
 
 bool GeoUtil::clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection)
