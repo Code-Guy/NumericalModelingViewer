@@ -118,8 +118,8 @@ protected:
 private:
     bool loadDatabase();
 	void preprocess();
-    void interpUniformGridData();
-    void clipExteriorSurface();
+	void clipExteriorMesh();
+	void interpUniformGridData();
 
     QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs);
     QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs);
@@ -171,10 +171,13 @@ private:
     QVector<SectionVertex> sectionVertices;
 	QVector<uint32_t> sectionIndices;
 	QOpenGLBuffer sectionIBO;
+	int sectionVertexNum;
+	int sectionIndexNum;
 
     class Camera* camera;
     QTimer updateTimer;
-    QElapsedTimer elapsedTimer;
+    QElapsedTimer deltaElapsedTimer;
+    QElapsedTimer globalElapsedTimer;
     QElapsedTimer profileTimer;
 };
 

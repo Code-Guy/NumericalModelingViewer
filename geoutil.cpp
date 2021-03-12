@@ -91,7 +91,7 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 			if (clipFace(mesh, face, plane, hit))
 			{
 				startEdge = hit.first;
-				clipLine.vertices.append(hit.second);
+				clipLine.vertices.push_back(hit.second);
 				break;
 			}
 		}

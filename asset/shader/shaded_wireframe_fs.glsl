@@ -74,14 +74,14 @@ vec3 calcHeatmapColor(float val, float minVal, float maxVal)
 	return mix(heatmapColors[low], heatmapColors[high], t);
 }
 
-bool isOnPositiveSideOfPlane(vec3 point)
+bool isOnPositiveSideOfPlane(vec3 point, float epsilon = 0.01f)
 {
-	return dot(plane.normal, point) > plane.dist;
+	return dot(plane.normal, point) > plane.dist + epsilon;
 }
 
 void main()
 {
-	if (!isOnPositiveSideOfPlane(GPosition))
+	if (!isOnPositiveSideOfPlane(GPosition, 1.0f))
 	{
 		discard;
 		return;
