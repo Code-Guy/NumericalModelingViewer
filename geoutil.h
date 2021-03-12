@@ -83,7 +83,7 @@ struct Plane
 {
 	QVector3D origin;
 	QVector3D normal;
-	float d;
+	float dist;
 };
 
 struct ClipLine

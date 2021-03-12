@@ -201,38 +201,38 @@ void OpenGLWindow::initializeGL()
 		shadedWireframeShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(NodeVertex, normalStress), 3, sizeof(NodeVertex));
 		shadedWireframeShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(NodeVertex, shearStress), 3, sizeof(NodeVertex));
 
-		shadedWireframeShaderProgram->setUniformValue("lineWidth", 0.5f);
-		shadedWireframeShaderProgram->setUniformValue("lineColor", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
+		shadedWireframeShaderProgram->setUniformValue("lineParam.width", 0.5f);
+		shadedWireframeShaderProgram->setUniformValue("lineParam.color", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
 
-		shadedWireframeShaderProgram->setUniformValue("minTotalDeformation", valueRange.minTotalDeformation);
-		shadedWireframeShaderProgram->setUniformValue("maxTotalDeformation", valueRange.maxTotalDeformation);
+		shadedWireframeShaderProgram->setUniformValue("plane.normal", plane.normal);
+		shadedWireframeShaderProgram->setUniformValue("plane.dist", plane.dist);
 
-		shadedWireframeShaderProgram->setUniformValue("minDeformation", valueRange.minDeformation);
-		shadedWireframeShaderProgram->setUniformValue("maxDeformation", valueRange.maxDeformation);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minTotalDeformation", valueRange.minTotalDeformation);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxTotalDeformation", valueRange.maxTotalDeformation);
 
-		shadedWireframeShaderProgram->setUniformValue("minNormalElasticStrain", valueRange.minNormalElasticStrain);
-		shadedWireframeShaderProgram->setUniformValue("maxNormalElasticStrain", valueRange.maxNormalElasticStrain);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minDeformation", valueRange.minDeformation);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxDeformation", valueRange.maxDeformation);
 
-		shadedWireframeShaderProgram->setUniformValue("minShearElasticStrain", valueRange.minShearElasticStrain);
-		shadedWireframeShaderProgram->setUniformValue("maxShearElasticStrain", valueRange.maxShearElasticStrain);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minNormalElasticStrain", valueRange.minNormalElasticStrain);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxNormalElasticStrain", valueRange.maxNormalElasticStrain);
 
-		shadedWireframeShaderProgram->setUniformValue("minMaximumPrincipalStress", valueRange.minMaximumPrincipalStress);
-		shadedWireframeShaderProgram->setUniformValue("maxMaximumPrincipalStress", valueRange.maxMaximumPrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minShearElasticStrain", valueRange.minShearElasticStrain);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxShearElasticStrain", valueRange.maxShearElasticStrain);
 
-		shadedWireframeShaderProgram->setUniformValue("minMiddlePrincipalStress", valueRange.minMiddlePrincipalStress);
-		shadedWireframeShaderProgram->setUniformValue("maxMiddlePrincipalStress", valueRange.maxMiddlePrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minMaximumPrincipalStress", valueRange.minMaximumPrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxMaximumPrincipalStress", valueRange.maxMaximumPrincipalStress);
 
-		shadedWireframeShaderProgram->setUniformValue("minMinimumPrincipalStress", valueRange.minMinimumPrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minMiddlePrincipalStress", valueRange.minMiddlePrincipalStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxMiddlePrincipalStress", valueRange.maxMiddlePrincipalStress);
+
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minMinimumPrincipalStress", valueRange.minMinimumPrincipalStress);
 		shadedWireframeShaderProgram->setUniformValue("maxMinimumPrincipalStress", valueRange.maxMinimumPrincipalStress);
 
-		shadedWireframeShaderProgram->setUniformValue("minNormalStress", valueRange.minNormalStress);
-		shadedWireframeShaderProgram->setUniformValue("maxNormalStress", valueRange.maxNormalStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minNormalStress", valueRange.minNormalStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxNormalStress", valueRange.maxNormalStress);
 
-		shadedWireframeShaderProgram->setUniformValue("minShearStress", valueRange.minShearStress);
-		shadedWireframeShaderProgram->setUniformValue("maxShearStress", valueRange.maxShearStress);
-
-		shadedWireframeShaderProgram->setUniformValue("planeOrigin", plane.origin);
-		shadedWireframeShaderProgram->setUniformValue("planeNormal", plane.normal);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
+		shadedWireframeShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
 	}
 
 	// 创建截面相关渲染资源
@@ -680,7 +680,7 @@ void OpenGLWindow::clipExteriorSurface()
 {
 	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
-	plane.d = QVector3D::dotProduct(plane.origin, plane.normal);
+	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
 
 	QVector<ClipLine> clipLines = GeoUtil::clipMesh(mesh, plane);
 	for (const ClipLine& clipLine : clipLines)

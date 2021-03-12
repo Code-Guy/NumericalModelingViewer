@@ -197,7 +197,7 @@ bool GeoUtil::clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, Q
 		return false;
 	}
 
-	float t = (plane.d - QVector3D::dotProduct(plane.normal, v0)) / dnv01;
+	float t = (plane.dist - QVector3D::dotProduct(plane.normal, v0)) / dnv01;
 	if (t < 0.0f || t > 1.0f)
 	{
 		return false;

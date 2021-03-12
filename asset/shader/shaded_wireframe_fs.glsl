@@ -14,38 +14,51 @@ noperspective in vec3 GEdgeDistance;
 
 out vec4 FColor;
 
-uniform float lineWidth;
-uniform vec4 lineColor;
+struct Line	
+{
+	float width;
+	vec4 color;
+};
 
-uniform float minTotalDeformation;
-uniform float maxTotalDeformation;
+struct Plane
+{
+	vec3 normal;
+	float dist;
+};
 
-uniform vec3 minDeformation;
-uniform vec3 maxDeformation;
+struct ValueRange
+{
+	float minTotalDeformation;
+	float maxTotalDeformation;
 
-uniform vec3 minNormalElasticStrain;
-uniform vec3 maxNormalElasticStrain;
+	vec3 minDeformation;
+	vec3 maxDeformation;
 
-uniform vec3 minShearElasticStrain;
-uniform vec3 maxShearElasticStrain;
+	vec3 minNormalElasticStrain;
+	vec3 maxNormalElasticStrain;
 
-uniform float minMaximumPrincipalStress;
-uniform float maxMaximumPrincipalStress;
+	vec3 minShearElasticStrain;
+	vec3 maxShearElasticStrain;
 
-uniform float minMiddlePrincipalStress;
-uniform float maxMiddlePrincipalStress;
+	float minMaximumPrincipalStress;
+	float maxMaximumPrincipalStress;
 
-uniform float minMinimumPrincipalStress;
-uniform float maxMinimumPrincipalStress;
+	float minMiddlePrincipalStress;
+	float maxMiddlePrincipalStress;
 
-uniform vec3 minNormalStress;
-uniform vec3 maxNormalStress;
+	float minMinimumPrincipalStress;
+	float maxMinimumPrincipalStress;
 
-uniform vec3 minShearStress;
-uniform vec3 maxShearStress;
+	vec3 minNormalStress;
+	vec3 maxNormalStress;
 
-uniform vec3 planeOrigin;
-uniform vec3 planeNormal;
+	vec3 minShearStress;
+	vec3 maxShearStress;
+};
+
+uniform Line line;
+uniform Plane plane;
+uniform ValueRange valueRange;
 
 const vec3 heatmapColors[5] = vec3[5](
 	vec3(0, 0, 1), vec3(0, 1, 1), vec3(0, 1, 0), vec3(1, 1, 0), vec3(1, 0, 0)
@@ -61,26 +74,26 @@ vec3 calcHeatmapColor(float val, float minVal, float maxVal)
 	return mix(heatmapColors[low], heatmapColors[high], t);
 }
 
-bool isOnFrontSideOfPlane(vec3 point)
+bool isOnPositiveSideOfPlane(vec3 point)
 {
-	return dot(planeNormal, point) - dot(planeNormal, planeOrigin) > 0;
+	return dot(plane.normal, point) > plane.dist;
 }
 
 void main()
 {
-	if (!isOnFrontSideOfPlane(GPosition))
+	if (!isOnPositiveSideOfPlane(GPosition))
 	{
 		discard;
 		return;
 	}
 
-	vec4 shadeColor = vec4(calcHeatmapColor(GTotalDeformation, minTotalDeformation, maxTotalDeformation), 1.0);
+	vec4 shadeColor = vec4(calcHeatmapColor(GTotalDeformation, valueRange.minTotalDeformation, valueRange.maxTotalDeformation), 1.0);
 
-	float d = min(GEdgeDistance.x, GEdgeDistance.y);
-	d = min(d, GEdgeDistance.z);
+	float minDist = min(GEdgeDistance.x, GEdgeDistance.y);
+	minDist = min(minDist, GEdgeDistance.z);
 
-	float mixVal = smoothstep(lineWidth - 1, lineWidth + 1, d);
-	FColor = mix(lineColor, shadeColor, mixVal);
+	float mixVal = smoothstep(line.width - 1, line.width + 1, minDist);
+	FColor = mix(line.color, shadeColor, mixVal);
 
 	// gamma correction
 	//float gamma = 2.2;
