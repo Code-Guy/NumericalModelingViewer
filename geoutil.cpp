@@ -2,6 +2,7 @@
 #include <QQueue>
 #include <QFile>
 #include <QTextStream>
+#include <QElapsedTimer>
 #include <fstream>
 
 void GeoUtil::loadObjMesh(const char* fileName, Mesh& mesh)
@@ -153,8 +154,10 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 	QVector<ClipLine> clipLines;
 	resetMeshVisited(mesh);
 
+	QElapsedTimer timer;
 	while (true)
 	{
+		timer.start();
 		ClipLine clipLine;
 		Edge startEdge;
 		QPair<Edge, QVector3D> hit;
@@ -172,6 +175,7 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 				break;
 			}
 		}
+		qDebug() << "clip mesh traverse time: " << timer.restart();
 
 		if (clipLine.vertices.isEmpty())
 		{
@@ -218,6 +222,7 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 		}
 
 		clipLines.append(clipLine);
+		qDebug() << "clip mesh find nearby edges time: " << timer.restart();
 	}
 
 	return clipLines;
