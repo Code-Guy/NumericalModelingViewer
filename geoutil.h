@@ -114,6 +114,8 @@ struct BoundingBox
 class GeoUtil
 {
 public:
+	static void loadObjMesh(const char* fileName, Mesh& mesh);
+	static void addFace(Mesh& mesh, uint32_t v0, uint32_t v1, uint32_t v2);
 	static void cleanMesh(Mesh& mesh);
 	static void fixWindingOrder(Mesh& mesh);
 	static QVector<ClipLine> clipMesh(Mesh& mesh, const Plane& plane);

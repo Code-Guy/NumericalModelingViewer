@@ -137,6 +137,7 @@ private:
     QVector<Facet> facets;
 
 	Mesh mesh;
+	Mesh objMesh;
     QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
@@ -173,6 +174,11 @@ private:
 	QOpenGLBuffer sectionIBO;
 	int sectionVertexNum;
 	int sectionIndexNum;
+
+	QOpenGLBuffer objVBO;
+	QOpenGLVertexArrayObject objVAO;
+	QVector<uint32_t> objIndices;
+	QOpenGLBuffer objIBO;
 
     class Camera* camera;
     QTimer updateTimer;

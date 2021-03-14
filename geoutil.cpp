@@ -1,5 +1,82 @@
 #include "geoutil.h"
 #include <QQueue>
+#include <QFile>
+#include <QTextStream>
+#include <fstream>
+
+void GeoUtil::loadObjMesh(const char* fileName, Mesh& mesh)
+{
+	QFile inputFile(fileName);
+	if (inputFile.open(QIODevice::ReadOnly))
+	{
+		QTextStream in(&inputFile);
+		while (!in.atEnd())
+		{
+			QChar header;
+			in >> header;
+			if (header == "v")
+			{
+				QVector3D vertex;
+				in >> vertex[0] >> vertex[1] >> vertex[2];
+				mesh.vertices.append(vertex);
+			}
+			else if (header == "f")
+			{
+				uint32_t v0, v1, v2;
+				in >> v0 >> v1 >> v2;
+				addFace(mesh, --v0, --v1, --v2);
+			}
+			in.readLine();
+		}
+		inputFile.close();
+	}
+
+	//std::ifstream ifs(fileName);
+	//char line[1024];
+	//while (!ifs.eof())
+	//{
+	//	std::string header;
+	//	ifs >> header;
+
+	//	if (header == "v")
+	//	{
+	//		QVector3D vertex;
+	//		ifs >> vertex[0] >> vertex[1] >> vertex[2];
+	//		mesh.vertices.append(vertex);
+	//	}
+	//	else if (header == "f")
+	//	{
+	//		uint32_t v0, v1, v2;
+	//		ifs >> v0 >> v1 >> v2;
+	//		addFace(mesh, --v0, --v1, --v2);
+	//	}
+	//	ifs.getline(line, 1024);
+	//}
+}
+
+void GeoUtil::addFace(Mesh& mesh, uint32_t v0, uint32_t v1, uint32_t v2)
+{
+	uint32_t faceIndex = mesh.faces.count();
+	mesh.faces.append(Face{ v0, v1, v2 });
+	Face& face = mesh.faces.back();
+
+	Edge edges[3] = { { v0, v1 }, { v1, v2 }, { v0, v2 } };
+	for (int j = 0; j < 3; ++j)
+	{
+		Edge& edge = edges[j];
+		auto iter = mesh.edges.find(edge);
+		if (iter == mesh.edges.end())
+		{
+			mesh.edges.insert(edge, { faceIndex });
+		}
+		else
+		{
+			edge = iter.key();
+			iter.value().append(faceIndex);
+		}
+		face.edges[j] = edge;
+	}
+}
 
 void GeoUtil::cleanMesh(Mesh& mesh)
 {

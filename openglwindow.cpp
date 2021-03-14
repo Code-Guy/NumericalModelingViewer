@@ -234,7 +234,7 @@ void OpenGLWindow::initializeGL()
 	// 创建截面相关渲染资源
 	{
 		sectionVertexNum = 0;
-		sectionVertexNum = 0;
+		sectionIndexNum = 0;
 		const int kMaxSectionVertexNum = 1600;
 		sectionVertices.resize(kMaxSectionVertexNum);
 		sectionIndices.resize(sectionVertices.count() * 3);
@@ -263,6 +263,30 @@ void OpenGLWindow::initializeGL()
 		sectionShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(SectionVertex, texcoord), 3, sizeof(SectionVertex));
 	}
 
+	// 创建obj模型相关渲染资源
+	{
+		objVAO.create();
+		objVAO.bind();
+
+		objVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		objVBO.create();
+		objVBO.bind();
+		objVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::StaticDraw);
+		objVBO.allocate(objMesh.vertices.constData(), objMesh.vertices.count() * sizeof(QVector3D));
+
+		// create the index buffer object
+		objIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		objIBO.create();
+		objIBO.bind();
+		objIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		objIBO.allocate(objIndices.constData(), objIndices.count() * sizeof(uint32_t));
+
+		// connect the inputs to the shader program
+		shadedWireframeShaderProgram->bind();
+		shadedWireframeShaderProgram->enableAttributeArray(0);
+		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
+	}
+
     // 初始化计时器
     deltaElapsedTimer.start();
 	globalElapsedTimer.start();
@@ -281,6 +305,9 @@ void OpenGLWindow::paintGL()
     float deltaTime = deltaElapsedTimer.elapsed() * 0.001f;
     deltaElapsedTimer.start();
     
+	// 更新窗口标题，显示帧率
+	window()->setWindowTitle(QString("Numerical Modeling Viewer    | %1 FPS").arg((int)(1.0f / deltaTime)));
+
     // 更新摄像机
     camera->tick(deltaTime);
 
@@ -290,7 +317,7 @@ void OpenGLWindow::paintGL()
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
 
-	clipExteriorMesh();
+	//clipExteriorMesh();
 
     glClearColor(0.7, 0.7, 0.7, 1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -323,6 +350,7 @@ void OpenGLWindow::paintGL()
 	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	facetVAO.bind();
+	//objVAO.bind();
 	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionShaderProgram->bind();
@@ -533,26 +561,7 @@ bool OpenGLWindow::loadDatabase()
 			uint32_t v1 = indices[i + 1];
 			uint32_t v2 = indices[i + 2];
 
-			uint32_t faceIndex = mesh.faces.count();
-			mesh.faces.append(Face{ v0, v1, v2 });
-			Face& face = mesh.faces.back();
-
-			Edge edges[3] = { { v0, v1 }, { v1, v2 }, { v0, v2 } };
-			for (int j = 0; j < 3; ++j)
-			{
-				Edge& edge = edges[j];
-				auto iter = mesh.edges.find(edge);
-				if (iter == mesh.edges.end())
-				{
-					mesh.edges.insert(edge, { faceIndex });
-				}
-				else
-				{
-					edge = iter.key();
-					iter.value().append(faceIndex);
-				}
-				face.edges[j] = edge;
-			}
+			GeoUtil::addFace(mesh, v0, v1, v2);
 		}
 	}
 
@@ -635,6 +644,28 @@ bool OpenGLWindow::loadDatabase()
 
 void OpenGLWindow::preprocess()
 {
+	// 加载测试obj模型
+	profileTimer.start();
+	GeoUtil::loadObjMesh("E:/Data/simple_monkey.obj", objMesh);
+
+	objIndices.resize(objMesh.faces.count() * 3);
+	for (int i = 0; i < objMesh.faces.count(); ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			objIndices[i * 3 + j] = objMesh.faces[i].vertices[j];
+		}
+	}
+	qDebug() << profileTimer.restart();
+
+	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
+	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
+	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
+	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
+
+	qDebug() << profileTimer.elapsed() << clipLines.count() << clipLines.front().vertices.count();
+	qDebug() << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+
 	GeoUtil::cleanMesh(mesh);
 	GeoUtil::fixWindingOrder(mesh);
 	bool result = GeoUtil::validateMesh(mesh);
@@ -655,7 +686,11 @@ void OpenGLWindow::clipExteriorMesh()
 	sectionVertexNum = 0;
 	sectionIndexNum = 0;
 
-	QVector<ClipLine> clipLines = GeoUtil::clipMesh(mesh, plane);
+	qint64 t0, t1, t2;
+	profileTimer.start();
+	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
+	t0 = profileTimer.restart();
+
 	for (const ClipLine& clipLine : clipLines)
 	{
 		SectionVertex center;
@@ -687,6 +722,8 @@ void OpenGLWindow::clipExteriorMesh()
 		vertex.texcoord = (vertex.position - boundingBox.min) / (boundingBox.max - boundingBox.min);
 	}
 
+	t1 = profileTimer.restart();
+
 	// 更新缓存数据
 	sectionVBO.bind();
 	int count = sectionVertexNum * sizeof(SectionVertex);
@@ -699,6 +736,10 @@ void OpenGLWindow::clipExteriorMesh()
 	dst = sectionIBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
 	memcpy(dst, (void*)sectionIndices.constData(), count);
 	sectionIBO.unmap();
+
+	t2 = profileTimer.restart();
+
+	qDebug() << t0 << t1 << t2;
 }
 
 void OpenGLWindow::interpUniformGridData()
