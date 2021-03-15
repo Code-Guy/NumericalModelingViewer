@@ -121,15 +121,6 @@ private:
 	void clipExteriorMesh();
 	void interpUniformGridData();
 
-    QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs);
-    QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs);
-    
-    template <typename T>
-    T qLerp(T a, T b, T t)
-	{
-		return a * (1 - t) + b * t;
-	}
-
     QVector3D toVec3(const std::array<double, 3>& arr3);
     std::array<double, 3> toArr3(const QVector3D& vec3);
 
@@ -142,7 +133,7 @@ private:
     ValueRange valueRange;
 	QVector<int> zoneTypes;
 
-    BoundingBox boundingBox;
+    Bound bound;
     std::vector<mba::point<3>> coords;
     std::vector<double> values;
 	Plane plane;

@@ -13,6 +13,26 @@ const uint32_t kInvalidIndex = 1e8;
 const QVector3D kMaxVec3 = QVector3D(kMaxVal, kMaxVal, kMaxVal);
 const QVector3D kMinVec3 = QVector3D(kMinVal, kMinVal, kMinVal);
 
+struct Plane
+{
+	QVector3D origin;
+	QVector3D normal;
+	float dist;
+};
+
+struct Bound
+{
+	QVector3D min = kMaxVec3;
+	QVector3D max = kMinVec3;
+	QVector3D centriod;
+
+	void scale(float s);
+	void combine(const QVector3D& position);
+	void combine(const Bound& bound);
+	int maxDim();
+	bool intersectPlane(const Plane& plane);
+};
+
 struct Edge
 {
 	std::array<uint32_t, 2> vertices;
@@ -49,6 +69,7 @@ struct Face
 {
 	std::array<uint32_t, 3> vertices;
 	std::array<Edge, 3> edges;
+	Bound bound;
 	bool visited = false;
 };
 
@@ -79,13 +100,6 @@ inline uint qHash(const Face& face, uint seed = 0)
 	return qHash(face.vertices[0] * face.vertices[1] * face.vertices[2]);
 }
 
-struct Plane
-{
-	QVector3D origin;
-	QVector3D normal;
-	float dist;
-};
-
 struct ClipLine
 {
 	QList<QVector3D> vertices;
@@ -98,18 +112,23 @@ struct Mesh
 	QVector<Face> faces;
 };
 
-struct BoundingBox
+struct BVHTreeNode
 {
-	QVector3D min = kMaxVec3;
-	QVector3D max = kMinVec3;
+	QVector<uint32_t> faces;
+	int num;
+	Bound bound;
 
-	void scale(float s)
-	{
-		QVector3D offset = (max - min) * (s - 1.0f);
-		min -= offset;
-		max += offset;
-	}
+	BVHTreeNode* children[2];
 };
+
+QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs);
+QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs);
+
+template <typename T>
+T qLerp(T a, T b, T t)
+{
+	return a * (1 - t) + b * t;
+}
 
 class GeoUtil
 {
@@ -120,6 +139,7 @@ public:
 	static void fixWindingOrder(Mesh& mesh);
 	static QVector<ClipLine> clipMesh(Mesh& mesh, const Plane& plane);
 	static bool validateMesh(Mesh& mesh);
+	static BVHTreeNode* buildBVHTree(const Mesh& mesh);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);
@@ -130,4 +150,5 @@ private:
 	static bool isBoundaryEdge(const Mesh& mesh, const Edge& edge);
 	static void traverseMesh(Mesh& mesh);
 	static void resetMeshVisited(Mesh& mesh);
+	static BVHTreeNode* buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end);
 };

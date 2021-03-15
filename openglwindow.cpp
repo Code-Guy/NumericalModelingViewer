@@ -248,7 +248,7 @@ void OpenGLWindow::initializeGL()
 	{
 		sectionVertexNum = 0;
 		sectionIndexNum = 0;
-		const int kMaxSectionVertexNum = 1600;
+		const int kMaxSectionVertexNum = 2400;
 		sectionVertices.resize(kMaxSectionVertexNum);
 		sectionIndices.resize(sectionVertices.count() * 3);
 
@@ -514,8 +514,8 @@ bool OpenGLWindow::loadDatabase()
 			nodeVertex.position[i] = query.value(i + 1).toFloat();
 		}
 
-		boundingBox.min = qMinVec3(boundingBox.min, nodeVertex.position);
-		boundingBox.max = qMaxVec3(boundingBox.max, nodeVertex.position);
+		bound.min = qMinVec3(bound.min, nodeVertex.position);
+		bound.max = qMaxVec3(bound.max, nodeVertex.position);
 		coords.push_back(toArr3(nodeVertex.position));
 		mesh.vertices.append(nodeVertex.position);
 
@@ -667,8 +667,10 @@ void OpenGLWindow::preprocess()
 {
 	// º”‘ÿ≤‚ ‘objƒ£–Õ
 	profileTimer.start();
-	GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
-
+	GeoUtil::loadObjMesh("E:/Data/simple_monkey.obj", objMesh);
+	
+	BVHTreeNode* root = GeoUtil::buildBVHTree(objMesh);
+	
 	objIndices.resize(objMesh.faces.count() * 3);
 	for (int i = 0; i < objMesh.faces.count(); ++i)
 	{
@@ -741,7 +743,7 @@ void OpenGLWindow::clipExteriorMesh()
 
 	for (SectionVertex& vertex : sectionVertices)
 	{
-		vertex.texcoord = (vertex.position - boundingBox.min) / (boundingBox.max - boundingBox.min);
+		vertex.texcoord = (vertex.position - bound.min) / (bound.max - bound.min);
 	}
 
 	t1 = profileTimer.restart();
@@ -766,10 +768,10 @@ void OpenGLWindow::clipExteriorMesh()
 
 void OpenGLWindow::interpUniformGridData()
 {
-	BoundingBox scaledBoundingBox = boundingBox;
-	scaledBoundingBox.scale(1.1f);
-	mba::point<3> low = toArr3(scaledBoundingBox.min);
-	mba::point<3> high = toArr3(scaledBoundingBox.max);
+	Bound scaledBound = bound;
+	scaledBound.scale(1.1f);
+	mba::point<3> low = toArr3(scaledBound.min);
+	mba::point<3> high = toArr3(scaledBound.max);
 
 	mba::index<3> dim = { 64, 64, 64 };
 	mba::MBA<3> interp(low, high, dim, coords, values);
@@ -777,8 +779,8 @@ void OpenGLWindow::interpUniformGridData()
 	UniformGrid uniformGrid;
 	uniformGrid.dim = dim;
 	uniformGrid.vertices.resize((dim[0] + 1) * (dim[1] + 1) * (dim[2] + 1));
-	mba::point<3> min = toArr3(boundingBox.min);
-	mba::point<3> max = toArr3(boundingBox.max);
+	mba::point<3> min = toArr3(bound.min);
+	mba::point<3> max = toArr3(bound.max);
 
 	int index = 0;
 	for (int i = 0; i <= dim[0]; ++i)
@@ -801,24 +803,6 @@ void OpenGLWindow::interpUniformGridData()
 			}
 		}
 	}
-}
-
-QVector3D OpenGLWindow::qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
-{
-	return QVector3D(
-		qMin(lhs[0], rhs[0]),
-		qMin(lhs[1], rhs[1]),
-		qMin(lhs[2], rhs[2])
-	);
-}
-
-QVector3D OpenGLWindow::qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
-{
-	return QVector3D(
-		qMax(lhs[0], rhs[0]),
-		qMax(lhs[1], rhs[1]),
-		qMax(lhs[2], rhs[2])
-	);
 }
 
 QVector3D OpenGLWindow::toVec3(const std::array<double, 3>& arr3)

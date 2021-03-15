@@ -3,7 +3,65 @@
 #include <QFile>
 #include <QTextStream>
 #include <QElapsedTimer>
+#include <QtAlgorithms>
+#include <algorithm>
 #include <fstream>
+
+void Bound::scale(float s)
+{
+	QVector3D offset = (max - min) * (s - 1.0f);
+	min -= offset;
+	max += offset;
+}
+
+void Bound::combine(const QVector3D& position)
+{
+	min = qMinVec3(min, position);
+	max = qMaxVec3(max, position);
+}
+
+void Bound::combine(const Bound& bound)
+{
+	min = qMinVec3(min, bound.min);
+	max = qMaxVec3(max, bound.max);
+}
+
+int Bound::maxDim()
+{
+	QVector3D size = max - min;
+	if (size[0] > size[1] && size[0] > size[2])
+	{
+		return 0;
+	}
+	if (size[1] > size[0] && size[1] > size[2])
+	{
+		return 1;
+	}
+	return 2;
+}
+
+bool Bound::intersectPlane(const Plane& plane)
+{
+
+}
+
+QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
+{
+	return QVector3D(
+		qMin(lhs[0], rhs[0]),
+		qMin(lhs[1], rhs[1]),
+		qMin(lhs[2], rhs[2])
+	);
+}
+
+QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
+{
+	return QVector3D(
+		qMax(lhs[0], rhs[0]),
+		qMax(lhs[1], rhs[1]),
+		qMax(lhs[2], rhs[2])
+	);
+}
 
 void GeoUtil::loadObjMesh(const char* fileName, Mesh& mesh)
 {
@@ -77,6 +135,12 @@ void GeoUtil::addFace(Mesh& mesh, uint32_t v0, uint32_t v1, uint32_t v2)
 		}
 		face.edges[j] = edge;
 	}
+
+	for (uint32_t v : face.vertices)
+	{
+		face.bound.combine(mesh.vertices[v]);
+	}
+	face.bound.centriod = (face.bound.min + face.bound.max) * 0.5f;
 }
 
 void GeoUtil::cleanMesh(Mesh& mesh)
@@ -372,4 +436,62 @@ bool GeoUtil::validateMesh(Mesh& mesh)
 	}
 
 	return true;
+}
+
+BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh)
+{
+	QVector<uint32_t> faces;
+	for (int i = 0; i < mesh.faces.count(); ++i)
+	{
+		faces.append(i);
+	}
+	return buildBVHTree(mesh, faces, 0, mesh.faces.count());
+}
+
+BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end)
+{
+	BVHTreeNode* node = new BVHTreeNode;
+	int num = end - begin;
+	node->num = num;
+
+	if (num <= 3)
+	{
+		for (int i = begin; i < end; ++i)
+		{
+			uint32_t f = faces[i];
+			const Bound& bound = mesh.faces[f].bound;
+			node->bound.combine(bound);
+		}
+
+		for (int i = begin; i < end; ++i)
+		{
+			node->faces.append(faces[i]);
+		}
+		node->children[0] = node->children[1] = nullptr;
+	}
+	else
+	{
+		Bound centriodBound;
+		for (int i = begin; i < end; ++i)
+		{
+			uint32_t f = faces[i];
+			const Bound& bound = mesh.faces[f].bound;
+			centriodBound.combine(bound.centriod);
+		}
+
+		int dim = centriodBound.maxDim();
+		int mid = (begin + end) * 0.5f;
+		std::nth_element(&faces[begin], &faces[mid], &faces[end - 1] + 1,
+			[&mesh, dim](uint32_t a, uint32_t b)
+		{
+			return mesh.faces[a].bound.centriod[dim] < mesh.faces[b].bound.centriod[dim];
+		});
+
+		node->children[0] = buildBVHTree(mesh, faces, begin, mid);
+		node->children[1] = buildBVHTree(mesh, faces, mid, end);
+		node->bound.combine(node->children[0]->bound);
+		node->bound.combine(node->children[1]->bound);
+	}
+
+	return node;
 }
