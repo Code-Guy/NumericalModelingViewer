@@ -29,6 +29,8 @@ OpenGLWindow::~OpenGLWindow()
 
     delete camera;
 
+	delete simpleShaderProgram;
+	delete nodeShaderProgram;
     delete wireframeShaderProgram;
     delete shadedWireframeShaderProgram;
 	delete sectionShaderProgram;
@@ -43,6 +45,9 @@ OpenGLWindow::~OpenGLWindow()
 	facetIBO.destroy();
 	sectionVAO.destroy();
 	sectionIBO.destroy();
+	objVAO.destroy();
+	objVBO.destroy();
+	objIBO.destroy();
 
     doneCurrent();
 }
@@ -70,8 +75,16 @@ void OpenGLWindow::initializeGL()
 
 	// 创建着色器程序
     {
+		simpleShaderProgram = new QOpenGLShaderProgram;
+		bool success = simpleShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/simple_vs.glsl");
+		Q_ASSERT_X(success, "simpleShaderProgram", qPrintable(simpleShaderProgram->log()));
+
+		success = simpleShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/simple_fs.glsl");
+		Q_ASSERT_X(success, "simpleShaderProgram", qPrintable(simpleShaderProgram->log()));
+		simpleShaderProgram->link();
+
 		nodeShaderProgram = new QOpenGLShaderProgram;
-		bool success = nodeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/node_vs.glsl");
+		success = nodeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/node_vs.glsl");
 		Q_ASSERT_X(success, "nodeShaderProgram", qPrintable(nodeShaderProgram->log()));
 
 		success = nodeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/node_fs.glsl");
@@ -285,6 +298,10 @@ void OpenGLWindow::initializeGL()
 		shadedWireframeShaderProgram->bind();
 		shadedWireframeShaderProgram->enableAttributeArray(0);
 		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
+
+		//simpleShaderProgram->bind();
+		//simpleShaderProgram->enableAttributeArray(0);
+		//simpleShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
 	}
 
     // 初始化计时器
@@ -317,8 +334,6 @@ void OpenGLWindow::paintGL()
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
 
-	//clipExteriorMesh();
-
     glClearColor(0.7, 0.7, 0.7, 1.0);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
    
@@ -349,14 +364,20 @@ void OpenGLWindow::paintGL()
 	//zoneVAO.bind();
 	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	facetVAO.bind();
-	//objVAO.bind();
-	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//facetVAO.bind();
+	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	//simpleShaderProgram->bind();
+	//simpleShaderProgram->setUniformValue("mvp", mvp);
+
+	objVAO.bind();
+	glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionShaderProgram->bind();
 	sectionShaderProgram->setUniformValue("mvp", mvp);
 
 	sectionVAO.bind();
+	clipExteriorMesh();
 	glDrawElements(GL_TRIANGLES, sectionIndexNum, GL_UNSIGNED_INT, nullptr);
 
 	//nodeShaderProgram->bind();
@@ -646,7 +667,7 @@ void OpenGLWindow::preprocess()
 {
 	// 加载测试obj模型
 	profileTimer.start();
-	GeoUtil::loadObjMesh("E:/Data/simple_monkey.obj", objMesh);
+	GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
 
 	objIndices.resize(objMesh.faces.count() * 3);
 	for (int i = 0; i < objMesh.faces.count(); ++i)
@@ -656,14 +677,15 @@ void OpenGLWindow::preprocess()
 			objIndices[i * 3 + j] = objMesh.faces[i].vertices[j];
 		}
 	}
-	qDebug() << profileTimer.restart();
+	qDebug() << profileTimer.elapsed();
 
-	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
-	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
-	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
+	//profileTimer.start();
+	//plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
+	//plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
+	//plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
+	//QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
 
-	qDebug() << profileTimer.elapsed() << clipLines.count() << clipLines.front().vertices.count();
+	//qDebug() << profileTimer.elapsed() << clipLines.count() << clipLines.front().vertices.count();
 	qDebug() << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 
 	GeoUtil::cleanMesh(mesh);
@@ -739,7 +761,7 @@ void OpenGLWindow::clipExteriorMesh()
 
 	t2 = profileTimer.restart();
 
-	qDebug() << t0 << t1 << t2;
+	//qDebug() << t0 << t1 << t2;
 }
 
 void OpenGLWindow::interpUniformGridData()

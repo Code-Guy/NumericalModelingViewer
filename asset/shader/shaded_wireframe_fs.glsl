@@ -87,8 +87,8 @@ void main()
 		return;
 	}
 
-	vec4 shadeColor = vec4(calcHeatmapColor(GTotalDeformation, valueRange.minTotalDeformation, valueRange.maxTotalDeformation), 1.0);
-	//vec4 shadeColor = vec4(1.0, 1.0, 1.0, 1.0);
+	//vec4 shadeColor = vec4(calcHeatmapColor(GTotalDeformation, valueRange.minTotalDeformation, valueRange.maxTotalDeformation), 1.0);
+	vec4 shadeColor = vec4(1.0, 1.0, 1.0, 1.0);
 
 	float minDist = min(GEdgeDistance.x, GEdgeDistance.y);
 	minDist = min(minDist, GEdgeDistance.z);

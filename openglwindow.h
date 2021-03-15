@@ -147,6 +147,7 @@ private:
     std::vector<double> values;
 	Plane plane;
 
+    QOpenGLShaderProgram* simpleShaderProgram;
     QOpenGLShaderProgram* nodeShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
     QOpenGLShaderProgram* shadedWireframeShaderProgram;

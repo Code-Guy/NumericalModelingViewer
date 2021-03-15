@@ -175,7 +175,7 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 				break;
 			}
 		}
-		qDebug() << "clip mesh traverse time: " << timer.restart();
+		//qDebug() << "clip mesh traverse time: " << timer.restart();
 
 		if (clipLine.vertices.isEmpty())
 		{
@@ -222,7 +222,7 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 		}
 
 		clipLines.append(clipLine);
-		qDebug() << "clip mesh find nearby edges time: " << timer.restart();
+		//qDebug() << "clip mesh find nearby edges time: " << timer.restart();
 	}
 
 	return clipLines;
