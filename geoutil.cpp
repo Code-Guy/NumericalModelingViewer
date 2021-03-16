@@ -42,7 +42,24 @@ int Bound::maxDim()
 
 bool Bound::intersectPlane(const Plane& plane)
 {
+	bool first = GeoUtil::calcPointPlaneSide(corners[0], plane);
+	for (int i = 1; i < 8; i++)
+	{
 
+	}
+	return true;
+}
+
+void Bound::cache()
+{
+	corners[0] = QVector3D(min[0], min[1], min[2]);
+	corners[1] = QVector3D(min[0], min[1], max[2]);
+	corners[2] = QVector3D(min[0], max[1], min[2]);
+	corners[3] = QVector3D(min[0], max[1], max[2]);
+	corners[4] = QVector3D(max[0], min[1], min[2]);
+	corners[5] = QVector3D(max[0], min[1], max[2]);
+	corners[6] = QVector3D(max[0], max[1], min[2]);
+	corners[7] = QVector3D(max[0], max[1], max[2]);
 }
 
 QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
@@ -213,7 +230,7 @@ void GeoUtil::fixWindingOrder(Mesh& mesh)
 	}
 }
 
-QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
+QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane, BVHTreeNode* root)
 {
 	QVector<ClipLine> clipLines;
 	resetMeshVisited(mesh);
@@ -239,7 +256,7 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 				break;
 			}
 		}
-		//qDebug() << "clip mesh traverse time: " << timer.restart();
+		qDebug() << "clip mesh traverse time: " << timer.restart();
 
 		if (clipLine.vertices.isEmpty())
 		{
@@ -286,7 +303,7 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane)
 		}
 
 		clipLines.append(clipLine);
-		//qDebug() << "clip mesh find nearby edges time: " << timer.restart();
+		qDebug() << "clip mesh find nearby edges time: " << timer.restart();
 	}
 
 	return clipLines;
@@ -494,4 +511,14 @@ BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, i
 	}
 
 	return node;
+}
+
+bool GeoUtil::findClipEdge(const Mesh& mesh, BVHTreeNode* root, QPair<Edge, QVector3D>& hit)
+{
+
+}
+
+bool GeoUtil::calcPointPlaneSide(const QVector3D& point, const Plane& plane)
+{
+	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
 }

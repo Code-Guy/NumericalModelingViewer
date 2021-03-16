@@ -667,10 +667,13 @@ void OpenGLWindow::preprocess()
 {
 	// 加载测试obj模型
 	profileTimer.start();
-	GeoUtil::loadObjMesh("E:/Data/simple_monkey.obj", objMesh);
-	
-	BVHTreeNode* root = GeoUtil::buildBVHTree(objMesh);
-	
+	GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
+	qint64 loadTime = profileTimer.restart();
+
+	// 构架bvh树
+	bvhRoot = GeoUtil::buildBVHTree(objMesh);
+	qint64 buildTime = profileTimer.restart();
+
 	objIndices.resize(objMesh.faces.count() * 3);
 	for (int i = 0; i < objMesh.faces.count(); ++i)
 	{
@@ -679,16 +682,15 @@ void OpenGLWindow::preprocess()
 			objIndices[i * 3 + j] = objMesh.faces[i].vertices[j];
 		}
 	}
-	qDebug() << profileTimer.elapsed();
+	qint64 copyTime = profileTimer.restart();
 
-	//profileTimer.start();
-	//plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
-	//plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
-	//plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	//QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
+	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
+	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
+	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
+	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
+	qint64 clipTime = profileTimer.restart();
 
-	//qDebug() << profileTimer.elapsed() << clipLines.count() << clipLines.front().vertices.count();
-	qDebug() << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+	qDebug() << loadTime << buildTime << copyTime << clipTime;
 
 	GeoUtil::cleanMesh(mesh);
 	GeoUtil::fixWindingOrder(mesh);

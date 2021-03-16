@@ -25,12 +25,14 @@ struct Bound
 	QVector3D min = kMaxVec3;
 	QVector3D max = kMinVec3;
 	QVector3D centriod;
+	QVector3D corners[8];
 
 	void scale(float s);
 	void combine(const QVector3D& position);
 	void combine(const Bound& bound);
 	int maxDim();
 	bool intersectPlane(const Plane& plane);
+	void cache();
 };
 
 struct Edge
@@ -137,9 +139,10 @@ public:
 	static void addFace(Mesh& mesh, uint32_t v0, uint32_t v1, uint32_t v2);
 	static void cleanMesh(Mesh& mesh);
 	static void fixWindingOrder(Mesh& mesh);
-	static QVector<ClipLine> clipMesh(Mesh& mesh, const Plane& plane);
+	static QVector<ClipLine> clipMesh(Mesh& mesh, const Plane& plane, BVHTreeNode* root);
 	static bool validateMesh(Mesh& mesh);
 	static BVHTreeNode* buildBVHTree(const Mesh& mesh);
+	static bool calcPointPlaneSide(const QVector3D& point, const Plane& plane);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);
@@ -151,4 +154,5 @@ private:
 	static void traverseMesh(Mesh& mesh);
 	static void resetMeshVisited(Mesh& mesh);
 	static BVHTreeNode* buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end);
+	static bool findClipEdge(const Mesh& mesh, BVHTreeNode* root, QPair<Edge, QVector3D>& hit);
 };

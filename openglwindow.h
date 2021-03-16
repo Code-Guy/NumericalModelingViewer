@@ -171,6 +171,7 @@ private:
 	QOpenGLVertexArrayObject objVAO;
 	QVector<uint32_t> objIndices;
 	QOpenGLBuffer objIBO;
+	BVHTreeNode* bvhRoot;
 
     class Camera* camera;
     QTimer updateTimer;
