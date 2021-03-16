@@ -26,13 +26,17 @@ struct Bound
 	QVector3D max = kMinVec3;
 	QVector3D centriod;
 	QVector3D corners[8];
+	int intersectFlag;
 
 	void scale(float s);
 	void combine(const QVector3D& position);
 	void combine(const Bound& bound);
 	int maxDim();
-	bool intersectPlane(const Plane& plane);
+	bool intersect(const Plane& plane);
+	int calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon = 0.001f);
+
 	void cache();
+	void reset();
 };
 
 struct Edge
@@ -121,6 +125,7 @@ struct BVHTreeNode
 	Bound bound;
 
 	BVHTreeNode* children[2];
+	bool isLeaf;
 };
 
 QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs);
@@ -142,17 +147,18 @@ public:
 	static QVector<ClipLine> clipMesh(Mesh& mesh, const Plane& plane, BVHTreeNode* root);
 	static bool validateMesh(Mesh& mesh);
 	static BVHTreeNode* buildBVHTree(const Mesh& mesh);
-	static bool calcPointPlaneSide(const QVector3D& point, const Plane& plane);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);
 	static void flipWindingOrder(Face& face);
-	static bool clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QPair<Edge, QVector3D>& hit, const Edge* exceptEdge = nullptr, bool exceptBoundaryEdge = true);
+	static void clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QMap<Edge, QVector3D>& hits);
 	static bool clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection);
 	static bool isManifordFace(const Mesh& mesh, const Face& face, bool strict = true);
 	static bool isBoundaryEdge(const Mesh& mesh, const Edge& edge);
 	static void traverseMesh(Mesh& mesh);
 	static void resetMeshVisited(Mesh& mesh);
 	static BVHTreeNode* buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end);
-	static bool findClipEdge(const Mesh& mesh, BVHTreeNode* root, QPair<Edge, QVector3D>& hit);
+	static void resetBVHTree(BVHTreeNode* node);
+	static void findAllClipEdges(Mesh& mesh, const Plane& plane, BVHTreeNode* node, QMap<Edge, QVector3D>& hits);
+	static bool isVec3NearlyEqual(const QVector3D& lhs, const QVector3D& rhs, float epsilon = 0.001f);
 };

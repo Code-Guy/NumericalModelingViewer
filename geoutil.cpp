@@ -40,14 +40,40 @@ int Bound::maxDim()
 	return 2;
 }
 
-bool Bound::intersectPlane(const Plane& plane)
+bool Bound::intersect(const Plane& plane)
 {
-	bool first = GeoUtil::calcPointPlaneSide(corners[0], plane);
+	if (intersectFlag != -1)
+	{
+		return intersectFlag;
+	}
+
+	int first = calcPointPlaneSide(corners[0], plane);
 	for (int i = 1; i < 8; i++)
 	{
-
+		int other = calcPointPlaneSide(corners[i], plane);
+		if (other != first)
+		{
+			intersectFlag = 1;
+			return true;
+		}
 	}
-	return true;
+
+	intersectFlag = 0;
+	return false;
+}
+
+int Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
+{
+	float dotVal = QVector3D::dotProduct(point, plane.normal);
+	if (dotVal < plane.dist - epsilon)
+	{
+		return -1;
+	}
+	if (dotVal > plane.dist + epsilon)
+	{
+		return 1;
+	}
+	return 0;
 }
 
 void Bound::cache()
@@ -60,6 +86,11 @@ void Bound::cache()
 	corners[5] = QVector3D(max[0], min[1], max[2]);
 	corners[6] = QVector3D(max[0], max[1], min[2]);
 	corners[7] = QVector3D(max[0], max[1], max[2]);
+}
+
+void Bound::reset()
+{
+	intersectFlag = -1;
 }
 
 QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
@@ -234,76 +265,73 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane, BVHTreeNode*
 {
 	QVector<ClipLine> clipLines;
 	resetMeshVisited(mesh);
+	resetBVHTree(root);
 
-	QElapsedTimer timer;
-	while (true)
+	QElapsedTimer profileTimer;
+	profileTimer.start();
+	QMap<Edge, QVector3D> hits;
+	findAllClipEdges(mesh, plane, root, hits);
+	resetMeshVisited(mesh);
+	qint64 findAllClipEdgesTime = profileTimer.restart();
+
+	while (!hits.isEmpty())
 	{
-		timer.start();
+		qDebug() << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 		ClipLine clipLine;
-		Edge startEdge;
-		QPair<Edge, QVector3D> hit;
-		for (Face& face : mesh.faces)
-		{
-			if (face.visited)
-			{
-				continue;
-			}
-
-			if (clipFace(mesh, face, plane, hit))
-			{
-				startEdge = hit.first;
-				clipLine.vertices.push_back(hit.second);
-				break;
-			}
-		}
-		qDebug() << "clip mesh traverse time: " << timer.restart();
-
-		if (clipLine.vertices.isEmpty())
-		{
-			break;
-		}
-
 		QQueue<QPair<Edge, bool>> queue;
-		queue.enqueue({ startEdge, true });
+		queue.enqueue({ hits.begin().key(), true });
+
 		while (!queue.isEmpty())
 		{
 			QPair<Edge, bool> pair = queue.dequeue();
-			const Edge& edge = pair.first;
+			const Edge& mainEdge = pair.first;
 			bool positive = pair.second;
-			for (uint32_t f : mesh.edges[edge])
-			{
-				Face& face = mesh.faces[f];
-				if (!face.visited)
-				{
-					face.visited = true;
-					if (clipFace(mesh, face, plane, hit, &edge, false))
-					{
-						const Edge& edge = hit.first;
-						const QVector3D& intersection = hit.second;
-						if (positive)
-						{
-							if (intersection.distanceToPoint(clipLine.vertices.back()) > 0.001f)
-							{
-								clipLine.vertices.push_back(intersection);
-							}
-						}
-						else
-						{
-							if (intersection.distanceToPoint(clipLine.vertices.front()) > 0.001f)
-							{
-								clipLine.vertices.push_front(intersection);
-							}
-						}
+			QVector3D intersection = hits[mainEdge];
+			hits.remove(mainEdge);
 
-						queue.enqueue({ edge, positive });
-						positive = !positive;
+			qDebug() << mainEdge.vertices[0] << mainEdge.vertices[1];
+
+			if (clipLine.vertices.isEmpty())
+			{
+				clipLine.vertices.push_back(intersection);
+			}
+			else if (positive)
+			{
+				if (!isVec3NearlyEqual(intersection, clipLine.vertices.back()))
+				{
+					clipLine.vertices.push_back(intersection);
+				}
+			}
+			else
+			{
+				if (!isVec3NearlyEqual(intersection, clipLine.vertices.front()))
+				{
+					clipLine.vertices.push_front(intersection);
+				}
+			}
+
+			for (uint32_t f : mesh.edges[mainEdge])
+			{
+				Face& neighborFace = mesh.faces[f];
+				if (!neighborFace.visited)
+				{
+					neighborFace.visited = true;
+
+					for (const Edge& neighborEdge : neighborFace.edges)
+					{
+						if (!(neighborEdge == mainEdge) && hits.contains(neighborEdge))
+						{
+							queue.enqueue({ neighborEdge, positive });
+							positive = !positive;
+
+							break;
+						}
 					}
 				}
 			}
 		}
 
 		clipLines.append(clipLine);
-		qDebug() << "clip mesh find nearby edges time: " << timer.restart();
 	}
 
 	return clipLines;
@@ -330,11 +358,11 @@ void GeoUtil::flipWindingOrder(Face& face)
 	qSwap(face.vertices[0], face.vertices[1]);
 }
 
-bool GeoUtil::clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QPair<Edge, QVector3D>& hit, const Edge* exceptEdge /*= nullptr*/, bool exceptBoundaryEdge /*= true*/)
+void GeoUtil::clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QMap<Edge, QVector3D>& hits)
 {
 	for (const Edge& edge : face.edges)
 	{
-		if ((exceptEdge && edge == *exceptEdge) || (isBoundaryEdge(mesh, edge) && exceptBoundaryEdge))
+		if (hits.contains(edge))
 		{
 			continue;
 		}
@@ -342,11 +370,9 @@ bool GeoUtil::clipFace(const Mesh& mesh, const Face& face, const Plane& plane, Q
 		QVector3D intersection;
 		if (clipEdge(mesh, edge, plane, intersection))
 		{
-			hit = { edge, intersection };
-			return true;
+			hits[edge] = intersection;
 		}
 	}
-	return false;
 }
 
 bool GeoUtil::clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection)
@@ -478,6 +504,7 @@ BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, i
 			uint32_t f = faces[i];
 			const Bound& bound = mesh.faces[f].bound;
 			node->bound.combine(bound);
+			node->bound.cache();
 		}
 
 		for (int i = begin; i < end; ++i)
@@ -485,6 +512,7 @@ BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, i
 			node->faces.append(faces[i]);
 		}
 		node->children[0] = node->children[1] = nullptr;
+		node->isLeaf = true;
 	}
 	else
 	{
@@ -508,17 +536,53 @@ BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, i
 		node->children[1] = buildBVHTree(mesh, faces, mid, end);
 		node->bound.combine(node->children[0]->bound);
 		node->bound.combine(node->children[1]->bound);
+		node->bound.cache();
+		node->isLeaf = false;
 	}
 
 	return node;
 }
 
-bool GeoUtil::findClipEdge(const Mesh& mesh, BVHTreeNode* root, QPair<Edge, QVector3D>& hit)
+void GeoUtil::resetBVHTree(BVHTreeNode* node)
 {
+	if (!node)
+	{
+		return;
+	}
 
+	node->bound.reset();
+	resetBVHTree(node->children[0]);
+	resetBVHTree(node->children[1]);
 }
 
-bool GeoUtil::calcPointPlaneSide(const QVector3D& point, const Plane& plane)
+void GeoUtil::findAllClipEdges(Mesh& mesh, const Plane& plane, BVHTreeNode* node, QMap<Edge, QVector3D>& hits)
 {
-	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
+	if (node->isLeaf)
+	{
+		for (uint32_t f : node->faces)
+		{
+			Face& face = mesh.faces[f];
+			if (!face.visited)
+			{
+				face.visited = true;
+				clipFace(mesh, mesh.faces[f], plane, hits);
+			}
+		}
+	}
+	else
+	{
+		if (node->children[0]->bound.intersect(plane))
+		{
+			findAllClipEdges(mesh, plane, node->children[0], hits);
+		}
+		if (node->children[1]->bound.intersect(plane))
+		{
+			findAllClipEdges(mesh, plane, node->children[1], hits);
+		}
+	}
+}
+
+bool GeoUtil::isVec3NearlyEqual(const QVector3D& lhs, const QVector3D& rhs, float epsilon /*= 0.001f*/)
+{
+	return lhs.distanceToPoint(rhs) < epsilon;
 }

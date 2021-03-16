@@ -330,7 +330,8 @@ void OpenGLWindow::paintGL()
 
 	// 每帧更新切割面，切割模型
 	float globalTime = globalElapsedTimer.elapsed() * 0.001f;
-	plane.origin = QVector3D(0.0f, 0.0f, 400.0f * qSin(globalTime));
+	//plane.origin = QVector3D(0.0f, 0.0f, 400.0f * qSin(globalTime));
+	plane.origin = QVector3D(0.0f, 0.0f, 100.0f);
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
 
@@ -667,7 +668,7 @@ void OpenGLWindow::preprocess()
 {
 	// 加载测试obj模型
 	profileTimer.start();
-	GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
+	GeoUtil::loadObjMesh("E:/Data/simple_monkey.obj", objMesh);
 	qint64 loadTime = profileTimer.restart();
 
 	// 构架bvh树
@@ -684,10 +685,10 @@ void OpenGLWindow::preprocess()
 	}
 	qint64 copyTime = profileTimer.restart();
 
-	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
+	plane.origin = QVector3D(0.0f, 0.0f, 100.0f);
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
+	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane, bvhRoot);
 	qint64 clipTime = profileTimer.restart();
 
 	qDebug() << loadTime << buildTime << copyTime << clipTime;
@@ -714,7 +715,7 @@ void OpenGLWindow::clipExteriorMesh()
 
 	qint64 t0, t1, t2;
 	profileTimer.start();
-	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane);
+	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane, bvhRoot);
 	t0 = profileTimer.restart();
 
 	for (const ClipLine& clipLine : clipLines)
