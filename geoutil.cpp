@@ -47,10 +47,10 @@ bool Bound::intersect(const Plane& plane)
 		return intersectFlag;
 	}
 
-	int first = calcPointPlaneSide(corners[0], plane);
+	bool first = calcPointPlaneSide(corners[0], plane);
 	for (int i = 1; i < 8; i++)
 	{
-		int other = calcPointPlaneSide(corners[i], plane);
+		bool other = calcPointPlaneSide(corners[i], plane);
 		if (other != first)
 		{
 			intersectFlag = 1;
@@ -62,18 +62,9 @@ bool Bound::intersect(const Plane& plane)
 	return false;
 }
 
-int Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
+bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
 {
-	float dotVal = QVector3D::dotProduct(point, plane.normal);
-	if (dotVal < plane.dist - epsilon)
-	{
-		return -1;
-	}
-	if (dotVal > plane.dist + epsilon)
-	{
-		return 1;
-	}
-	return 0;
+	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
 }
 
 void Bound::cache()
@@ -272,44 +263,21 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane, BVHTreeNode*
 	QMap<Edge, QVector3D> hits;
 	findAllClipEdges(mesh, plane, root, hits);
 	resetMeshVisited(mesh);
-	qint64 findAllClipEdgesTime = profileTimer.restart();
+	qint64 t0 = profileTimer.restart();
 
 	while (!hits.isEmpty())
 	{
-		qDebug() << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
 		ClipLine clipLine;
 		QQueue<QPair<Edge, bool>> queue;
 		queue.enqueue({ hits.begin().key(), true });
+		clipLine.vertices.push_front(hits.begin().value());
+		hits.remove(hits.begin().key());
 
 		while (!queue.isEmpty())
 		{
 			QPair<Edge, bool> pair = queue.dequeue();
 			const Edge& mainEdge = pair.first;
 			bool positive = pair.second;
-			QVector3D intersection = hits[mainEdge];
-			hits.remove(mainEdge);
-
-			qDebug() << mainEdge.vertices[0] << mainEdge.vertices[1];
-
-			if (clipLine.vertices.isEmpty())
-			{
-				clipLine.vertices.push_back(intersection);
-			}
-			else if (positive)
-			{
-				if (!isVec3NearlyEqual(intersection, clipLine.vertices.back()))
-				{
-					clipLine.vertices.push_back(intersection);
-				}
-			}
-			else
-			{
-				if (!isVec3NearlyEqual(intersection, clipLine.vertices.front()))
-				{
-					clipLine.vertices.push_front(intersection);
-				}
-			}
-
 			for (uint32_t f : mesh.edges[mainEdge])
 			{
 				Face& neighborFace = mesh.faces[f];
@@ -321,6 +289,23 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane, BVHTreeNode*
 					{
 						if (!(neighborEdge == mainEdge) && hits.contains(neighborEdge))
 						{
+							QVector3D intersection = hits[neighborEdge];
+							if (positive)
+							{
+								if (!isVec3NearlyEqual(intersection, clipLine.vertices.back()))
+								{
+									clipLine.vertices.push_back(intersection);
+								}
+							}
+							else
+							{
+								if (!isVec3NearlyEqual(intersection, clipLine.vertices.front()))
+								{
+									clipLine.vertices.push_front(intersection);
+								}
+							}
+
+							hits.remove(neighborEdge);
 							queue.enqueue({ neighborEdge, positive });
 							positive = !positive;
 
@@ -333,6 +318,9 @@ QVector<ClipLine> GeoUtil::clipMesh(Mesh& mesh, const Plane& plane, BVHTreeNode*
 
 		clipLines.append(clipLine);
 	}
+
+	qint64 t1 = profileTimer.restart();
+	//qDebug() << t0 << t1;
 
 	return clipLines;
 }

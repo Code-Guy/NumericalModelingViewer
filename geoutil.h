@@ -33,7 +33,7 @@ struct Bound
 	void combine(const Bound& bound);
 	int maxDim();
 	bool intersect(const Plane& plane);
-	int calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon = 0.001f);
+	bool calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon = 0.001f);
 
 	void cache();
 	void reset();

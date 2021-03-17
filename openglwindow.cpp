@@ -248,7 +248,7 @@ void OpenGLWindow::initializeGL()
 	{
 		sectionVertexNum = 0;
 		sectionIndexNum = 0;
-		const int kMaxSectionVertexNum = 2400;
+		const int kMaxSectionVertexNum = 5000;
 		sectionVertices.resize(kMaxSectionVertexNum);
 		sectionIndices.resize(sectionVertices.count() * 3);
 
@@ -330,8 +330,8 @@ void OpenGLWindow::paintGL()
 
 	// 每帧更新切割面，切割模型
 	float globalTime = globalElapsedTimer.elapsed() * 0.001f;
-	//plane.origin = QVector3D(0.0f, 0.0f, 400.0f * qSin(globalTime));
-	plane.origin = QVector3D(0.0f, 0.0f, 100.0f);
+	plane.origin = QVector3D(0.0f, 0.0f, 400.0f * qSin(globalTime));
+	//plane.origin = QVector3D(0.0f, 0.0f, -45.25f);
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
 
@@ -368,8 +368,10 @@ void OpenGLWindow::paintGL()
 	//facetVAO.bind();
 	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	//simpleShaderProgram->bind();
-	//simpleShaderProgram->setUniformValue("mvp", mvp);
+	simpleShaderProgram->bind();
+	simpleShaderProgram->setUniformValue("mvp", mvp);
+	simpleShaderProgram->setUniformValue("plane.normal", plane.normal);
+	simpleShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	objVAO.bind();
 	glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
@@ -668,7 +670,7 @@ void OpenGLWindow::preprocess()
 {
 	// 加载测试obj模型
 	profileTimer.start();
-	GeoUtil::loadObjMesh("E:/Data/simple_monkey.obj", objMesh);
+	GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
 	qint64 loadTime = profileTimer.restart();
 
 	// 构架bvh树
