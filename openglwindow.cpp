@@ -32,7 +32,7 @@ OpenGLWindow::~OpenGLWindow()
 	delete simpleShaderProgram;
 	delete nodeShaderProgram;
     delete wireframeShaderProgram;
-    delete shadedWireframeShaderProgram;
+    delete shadedShaderProgram;
 	delete sectionShaderProgram;
 
     nodeVBO.destroy();
@@ -64,14 +64,21 @@ void OpenGLWindow::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     glEnable(GL_LINE_SMOOTH);
 	GLint range[2];
 	glGetIntegerv(GL_SMOOTH_LINE_WIDTH_RANGE, range);
     glLineWidth(range[1]);
 
 	glEnable(GL_POINT_SMOOTH);
-	glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 	glEnable(GL_PROGRAM_POINT_SIZE);
+
+	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);
+	glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);
+	glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
+	glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
 
 	// 创建着色器程序
     {
@@ -99,16 +106,13 @@ void OpenGLWindow::initializeGL()
         Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
 		wireframeShaderProgram->link();
 
-		shadedWireframeShaderProgram = new QOpenGLShaderProgram;
-		success = shadedWireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/shaded_wireframe_vs.glsl");
-		Q_ASSERT_X(success, "shadedWireframeShaderProgram", qPrintable(shadedWireframeShaderProgram->log()));
+		shadedShaderProgram = new QOpenGLShaderProgram;
+		success = shadedShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/shaded_vs.glsl");
+		Q_ASSERT_X(success, "shadedShaderProgram", qPrintable(shadedShaderProgram->log()));
 
-		success = shadedWireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Geometry, "asset/shader/shaded_wireframe_gs.glsl");
-		Q_ASSERT_X(success, "shadedWireframeShaderProgram", qPrintable(shadedWireframeShaderProgram->log()));
-
-		success = shadedWireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/shaded_wireframe_fs.glsl");
-		Q_ASSERT_X(success, "shadedWireframeShaderProgram", qPrintable(shadedWireframeShaderProgram->log()));
-		shadedWireframeShaderProgram->link();
+		success = shadedShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/shaded_fs.glsl");
+		Q_ASSERT_X(success, "shadedShaderProgram", qPrintable(shadedShaderProgram->log()));
+		shadedShaderProgram->link();
 
 		sectionShaderProgram = new QOpenGLShaderProgram;
 		success = sectionShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/section_vs.glsl");
@@ -171,9 +175,9 @@ void OpenGLWindow::initializeGL()
 		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
-		shadedWireframeShaderProgram->bind();
-		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
+		shadedShaderProgram->bind();
+		shadedShaderProgram->enableAttributeArray(0);
+		shadedShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
     }
 
 	// 创建Face相关渲染资源
@@ -190,58 +194,55 @@ void OpenGLWindow::initializeGL()
 		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
-		shadedWireframeShaderProgram->bind();
-		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->enableAttributeArray(1);
-		shadedWireframeShaderProgram->enableAttributeArray(2);
-		shadedWireframeShaderProgram->enableAttributeArray(3);
-		shadedWireframeShaderProgram->enableAttributeArray(4);
-		shadedWireframeShaderProgram->enableAttributeArray(5);
-		shadedWireframeShaderProgram->enableAttributeArray(6);
-		shadedWireframeShaderProgram->enableAttributeArray(7);
-		shadedWireframeShaderProgram->enableAttributeArray(8);
-		shadedWireframeShaderProgram->enableAttributeArray(9);
+		shadedShaderProgram->bind();
+		shadedShaderProgram->enableAttributeArray(0);
+		shadedShaderProgram->enableAttributeArray(1);
+		shadedShaderProgram->enableAttributeArray(2);
+		shadedShaderProgram->enableAttributeArray(3);
+		shadedShaderProgram->enableAttributeArray(4);
+		shadedShaderProgram->enableAttributeArray(5);
+		shadedShaderProgram->enableAttributeArray(6);
+		shadedShaderProgram->enableAttributeArray(7);
+		shadedShaderProgram->enableAttributeArray(8);
+		shadedShaderProgram->enableAttributeArray(9);
 
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(NodeVertex, totalDeformation), 1, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(2, GL_FLOAT, offsetof(NodeVertex, deformation), 3, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(3, GL_FLOAT, offsetof(NodeVertex, normalElasticStrain), 3, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(4, GL_FLOAT, offsetof(NodeVertex, shearElasticStrain), 3, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(5, GL_FLOAT, offsetof(NodeVertex, maximumPrincipalStress), 1, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(6, GL_FLOAT, offsetof(NodeVertex, middlePrincipalStress), 1, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(7, GL_FLOAT, offsetof(NodeVertex, minimumPrincipalStress), 1, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(NodeVertex, normalStress), 3, sizeof(NodeVertex));
-		shadedWireframeShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(NodeVertex, shearStress), 3, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(NodeVertex, totalDeformation), 1, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(2, GL_FLOAT, offsetof(NodeVertex, deformation), 3, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(3, GL_FLOAT, offsetof(NodeVertex, normalElasticStrain), 3, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(4, GL_FLOAT, offsetof(NodeVertex, shearElasticStrain), 3, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(5, GL_FLOAT, offsetof(NodeVertex, maximumPrincipalStress), 1, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(6, GL_FLOAT, offsetof(NodeVertex, middlePrincipalStress), 1, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(7, GL_FLOAT, offsetof(NodeVertex, minimumPrincipalStress), 1, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(NodeVertex, normalStress), 3, sizeof(NodeVertex));
+		shadedShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(NodeVertex, shearStress), 3, sizeof(NodeVertex));
 
-		shadedWireframeShaderProgram->setUniformValue("lineParam.width", 0.5f);
-		shadedWireframeShaderProgram->setUniformValue("lineParam.color", QVector4D(0.0f, 0.0f, 0.0f, 1.0f));
+		shadedShaderProgram->setUniformValue("valueRange.minTotalDeformation", valueRange.minTotalDeformation);
+		shadedShaderProgram->setUniformValue("valueRange.maxTotalDeformation", valueRange.maxTotalDeformation);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minTotalDeformation", valueRange.minTotalDeformation);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxTotalDeformation", valueRange.maxTotalDeformation);
+		shadedShaderProgram->setUniformValue("valueRange.minDeformation", valueRange.minDeformation);
+		shadedShaderProgram->setUniformValue("valueRange.maxDeformation", valueRange.maxDeformation);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minDeformation", valueRange.minDeformation);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxDeformation", valueRange.maxDeformation);
+		shadedShaderProgram->setUniformValue("valueRange.minNormalElasticStrain", valueRange.minNormalElasticStrain);
+		shadedShaderProgram->setUniformValue("valueRange.maxNormalElasticStrain", valueRange.maxNormalElasticStrain);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minNormalElasticStrain", valueRange.minNormalElasticStrain);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxNormalElasticStrain", valueRange.maxNormalElasticStrain);
+		shadedShaderProgram->setUniformValue("valueRange.minShearElasticStrain", valueRange.minShearElasticStrain);
+		shadedShaderProgram->setUniformValue("valueRange.maxShearElasticStrain", valueRange.maxShearElasticStrain);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minShearElasticStrain", valueRange.minShearElasticStrain);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxShearElasticStrain", valueRange.maxShearElasticStrain);
+		shadedShaderProgram->setUniformValue("valueRange.minMaximumPrincipalStress", valueRange.minMaximumPrincipalStress);
+		shadedShaderProgram->setUniformValue("valueRange.maxMaximumPrincipalStress", valueRange.maxMaximumPrincipalStress);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minMaximumPrincipalStress", valueRange.minMaximumPrincipalStress);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxMaximumPrincipalStress", valueRange.maxMaximumPrincipalStress);
+		shadedShaderProgram->setUniformValue("valueRange.minMiddlePrincipalStress", valueRange.minMiddlePrincipalStress);
+		shadedShaderProgram->setUniformValue("valueRange.maxMiddlePrincipalStress", valueRange.maxMiddlePrincipalStress);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minMiddlePrincipalStress", valueRange.minMiddlePrincipalStress);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxMiddlePrincipalStress", valueRange.maxMiddlePrincipalStress);
+		shadedShaderProgram->setUniformValue("valueRange.minMinimumPrincipalStress", valueRange.minMinimumPrincipalStress);
+		shadedShaderProgram->setUniformValue("maxMinimumPrincipalStress", valueRange.maxMinimumPrincipalStress);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minMinimumPrincipalStress", valueRange.minMinimumPrincipalStress);
-		shadedWireframeShaderProgram->setUniformValue("maxMinimumPrincipalStress", valueRange.maxMinimumPrincipalStress);
+		shadedShaderProgram->setUniformValue("valueRange.minNormalStress", valueRange.minNormalStress);
+		shadedShaderProgram->setUniformValue("valueRange.maxNormalStress", valueRange.maxNormalStress);
 
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minNormalStress", valueRange.minNormalStress);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxNormalStress", valueRange.maxNormalStress);
-
-		shadedWireframeShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
-		shadedWireframeShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
+		shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
+		shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
 	}
 
 	// 创建截面相关渲染资源
@@ -295,9 +296,9 @@ void OpenGLWindow::initializeGL()
 		objIBO.allocate(objIndices.constData(), objIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
-		shadedWireframeShaderProgram->bind();
-		shadedWireframeShaderProgram->enableAttributeArray(0);
-		shadedWireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
+		shadedShaderProgram->bind();
+		shadedShaderProgram->enableAttributeArray(0);
+		shadedShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
 
 		//simpleShaderProgram->bind();
 		//simpleShaderProgram->enableAttributeArray(0);
@@ -343,45 +344,38 @@ void OpenGLWindow::paintGL()
     QMatrix4x4 mv = v * m;
     QMatrix4x4 mvp = camera->getPerspectiveMatrix() * mv;
 
-    //wireframeShaderProgram->bind();
-    //wireframeShaderProgram->setUniformValue("mvp", mvp);
+    wireframeShaderProgram->bind();
+    wireframeShaderProgram->setUniformValue("mvp", mvp);
 
-    //wireframeVAO.bind();
-    //glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+    wireframeVAO.bind();
+    glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-    shadedWireframeShaderProgram->bind();
-    shadedWireframeShaderProgram->setUniformValue("mvp", mvp);
-    shadedWireframeShaderProgram->setUniformValue("mv", mv);
-	float halfWidth = width() * 0.5f;
-	float halfHeight = height() / 2.0f;
-	QMatrix4x4 viewport = viewport = QMatrix4x4(halfWidth, 0.0f, 0.0f, 0.0f,
-		0.0f, halfHeight, 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		halfWidth + 0, halfHeight + 0, 0.0f, 1.0f);
-    shadedWireframeShaderProgram->setUniformValue("viewport", viewport);
-	shadedWireframeShaderProgram->setUniformValue("plane.normal", plane.normal);
-	shadedWireframeShaderProgram->setUniformValue("plane.dist", plane.dist);
+    shadedShaderProgram->bind();
+    shadedShaderProgram->setUniformValue("mvp", mvp);
+    shadedShaderProgram->setUniformValue("mv", mv);
+	shadedShaderProgram->setUniformValue("plane.normal", plane.normal);
+	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	//zoneVAO.bind();
 	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	//facetVAO.bind();
-	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
+	facetVAO.bind();
+	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	simpleShaderProgram->bind();
-	simpleShaderProgram->setUniformValue("mvp", mvp);
-	simpleShaderProgram->setUniformValue("plane.normal", plane.normal);
-	simpleShaderProgram->setUniformValue("plane.dist", plane.dist);
+	//simpleShaderProgram->bind();
+	//simpleShaderProgram->setUniformValue("mvp", mvp);
+	//simpleShaderProgram->setUniformValue("plane.normal", plane.normal);
+	//simpleShaderProgram->setUniformValue("plane.dist", plane.dist);
 
-	objVAO.bind();
-	glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//objVAO.bind();
+	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	sectionShaderProgram->bind();
-	sectionShaderProgram->setUniformValue("mvp", mvp);
+	//sectionShaderProgram->bind();
+	//sectionShaderProgram->setUniformValue("mvp", mvp);
 
-	sectionVAO.bind();
-	clipExteriorMesh();
-	glDrawElements(GL_TRIANGLES, sectionIndexNum, GL_UNSIGNED_INT, nullptr);
+	//sectionVAO.bind();
+	//clipExteriorMesh();
+	//glDrawElements(GL_TRIANGLES, sectionIndexNum, GL_UNSIGNED_INT, nullptr);
 
 	//nodeShaderProgram->bind();
 	//nodeShaderProgram->setUniformValue("mvp", mvp);
@@ -455,11 +449,11 @@ bool OpenGLWindow::loadDatabase()
 
 		if (zone.num == 8)
 		{
-			wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-				zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[2], zone.indices[4],
-				zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2],
-				zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6],
-				zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
+			//wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
+			//	zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[2], zone.indices[4],
+			//	zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2],
+			//	zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6],
+			//	zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
 
 			zoneIndices.append({ zone.indices[0], zone.indices[2], zone.indices[1],
 				zone.indices[2], zone.indices[4], zone.indices[1],
@@ -477,10 +471,10 @@ bool OpenGLWindow::loadDatabase()
 		}
 		else if (zone.num == 6)
 		{
-			wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-				zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
-				zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
-				zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
+			//wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
+			//	zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
+			//	zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
+			//	zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
 
 			zoneIndices.append({ zone.indices[2], zone.indices[5], zone.indices[4],
 			zone.indices[0], zone.indices[1], zone.indices[3],
@@ -569,13 +563,20 @@ bool OpenGLWindow::loadDatabase()
 		if (facet.num == 3)
 		{
 			indices.append({ facet.indices[0], facet.indices[1], facet.indices[2] });
+			wireframeIndices.append({ facet.indices[0], facet.indices[1],
+				facet.indices[0], facet.indices[2],
+				facet.indices[1], facet.indices[2] });
 		}
 		else if (facet.num == 4)
 		{
 			indices.append({
-				facet.indices[0], facet.indices[2], facet.indices[1],
-				facet.indices[0], facet.indices[3], facet.indices[2]
+				facet.indices[0], facet.indices[1], facet.indices[2],
+				facet.indices[0], facet.indices[2], facet.indices[3]
 				});
+			wireframeIndices.append({ facet.indices[0], facet.indices[1],
+				facet.indices[1], facet.indices[2],
+				facet.indices[2], facet.indices[3],
+				facet.indices[3], facet.indices[0] });
 		}
 
 		facetIndices.append(indices);
@@ -668,32 +669,32 @@ bool OpenGLWindow::loadDatabase()
 
 void OpenGLWindow::preprocess()
 {
-	// 加载测试obj模型
-	profileTimer.start();
-	GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
-	qint64 loadTime = profileTimer.restart();
+	//// 加载测试obj模型
+	//profileTimer.start();
+	//GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
+	//qint64 loadTime = profileTimer.restart();
 
-	// 构架bvh树
-	bvhRoot = GeoUtil::buildBVHTree(objMesh);
-	qint64 buildTime = profileTimer.restart();
+	//// 构架bvh树
+	//bvhRoot = GeoUtil::buildBVHTree(objMesh);
+	//qint64 buildTime = profileTimer.restart();
 
-	objIndices.resize(objMesh.faces.count() * 3);
-	for (int i = 0; i < objMesh.faces.count(); ++i)
-	{
-		for (int j = 0; j < 3; ++j)
-		{
-			objIndices[i * 3 + j] = objMesh.faces[i].vertices[j];
-		}
-	}
-	qint64 copyTime = profileTimer.restart();
+	//objIndices.resize(objMesh.faces.count() * 3);
+	//for (int i = 0; i < objMesh.faces.count(); ++i)
+	//{
+	//	for (int j = 0; j < 3; ++j)
+	//	{
+	//		objIndices[i * 3 + j] = objMesh.faces[i].vertices[j];
+	//	}
+	//}
+	//qint64 copyTime = profileTimer.restart();
 
-	plane.origin = QVector3D(0.0f, 0.0f, 100.0f);
-	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
-	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane, bvhRoot);
-	qint64 clipTime = profileTimer.restart();
+	//plane.origin = QVector3D(0.0f, 0.0f, 100.0f);
+	//plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
+	//plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
+	//QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane, bvhRoot);
+	//qint64 clipTime = profileTimer.restart();
 
-	qDebug() << loadTime << buildTime << copyTime << clipTime;
+	//qDebug() << loadTime << buildTime << copyTime << clipTime;
 
 	GeoUtil::cleanMesh(mesh);
 	GeoUtil::fixWindingOrder(mesh);

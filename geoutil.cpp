@@ -191,7 +191,9 @@ void GeoUtil::cleanMesh(Mesh& mesh)
 	QVector<Face> invalidFaces;
 	QVector<Face> validFaces;
 	QMap<Edge, QVector<uint32_t>> validEdges;
+	QMap<Edge, QVector<uint32_t>> invalidEdges;
 	int validFaceIndex = 0;
+	int invalidFaceIndex = 0;
 
 	for (int i = 0; i < mesh.faces.count(); ++i)
 	{
@@ -204,7 +206,13 @@ void GeoUtil::cleanMesh(Mesh& mesh)
 
 		if (existed || !face.visited || !isManifordFace(mesh, face))
 		{
+			for (Edge& edge : face.edges)
+			{
+				invalidEdges[edge].append(invalidFaceIndex);
+			}
+
 			invalidFaces.append(face);
+			invalidFaceIndex++;
 		}
 		else
 		{
@@ -218,9 +226,10 @@ void GeoUtil::cleanMesh(Mesh& mesh)
 		}
 	}
 
-	//mesh.faces = invalidFaces;
 	mesh.faces = validFaces;
 	mesh.edges = validEdges;
+	//mesh.faces = invalidFaces;
+	//mesh.edges = invalidEdges;
 }
 
 void GeoUtil::fixWindingOrder(Mesh& mesh)

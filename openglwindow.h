@@ -141,7 +141,7 @@ private:
     QOpenGLShaderProgram* simpleShaderProgram;
     QOpenGLShaderProgram* nodeShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
-    QOpenGLShaderProgram* shadedWireframeShaderProgram;
+	QOpenGLShaderProgram* shadedShaderProgram;
     QOpenGLShaderProgram* sectionShaderProgram;
 
     QOpenGLBuffer nodeVBO;
