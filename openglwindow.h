@@ -39,6 +39,9 @@ struct SectionVertex
 
 struct ValueRange
 {
+	QVector3D minPosition = kMaxVec3;
+	QVector3D maxPosition = kMinVec3;
+
 	float minTotalDeformation = kMaxVal;
 	float maxTotalDeformation = kMinVal;
 
@@ -91,10 +94,19 @@ struct Facet
 	quint32 indices[4];
 };
 
-struct UniformGrid
+struct ScatterPoints
+{
+	Bound bound;
+	Bound interpBound;
+	std::vector<mba::point<3>> coords;
+	std::vector<double> values;
+};
+
+struct UniformGrids
 {
 	std::array<size_t, 3> dim;
-	std::vector<NodeVertex> vertices;
+	Bound bound;
+	std::vector<QVector4D> values;
 };
 
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
@@ -118,8 +130,9 @@ protected:
 private:
     bool loadDatabase();
 	void preprocess();
-	void clipExteriorMesh();
-	void interpUniformGridData();
+	void clipMeshExterior();
+	void interpUniformGrids();
+	void initializeVoxelTexture();
 
     QVector3D toVec3(const std::array<double, 3>& arr3);
     std::array<double, 3> toArr3(const QVector3D& vec3);
@@ -129,14 +142,10 @@ private:
 
 	Mesh mesh;
 	Mesh objMesh;
+	Plane plane;
     QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
-
-    Bound bound;
-    std::vector<mba::point<3>> coords;
-    std::vector<double> values;
-	Plane plane;
 
     QOpenGLShaderProgram* simpleShaderProgram;
     QOpenGLShaderProgram* nodeShaderProgram;
@@ -178,6 +187,10 @@ private:
     QElapsedTimer deltaElapsedTimer;
     QElapsedTimer globalElapsedTimer;
     QElapsedTimer profileTimer;
+
+	ScatterPoints scatterPoints;
+	UniformGrids uniformGrids;
+	QOpenGLTexture* voxelTexture;
 };
 
 #endif // OPENGLWINDOW_H

@@ -15,7 +15,7 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
     // 加载数据
 	loadDatabase();
 	preprocess();
-	//interpUniformGridData();
+	interpUniformGrids();
 
     // 初始化摄像机
 	camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
@@ -34,6 +34,8 @@ OpenGLWindow::~OpenGLWindow()
     delete wireframeShaderProgram;
     delete shadedShaderProgram;
 	delete sectionShaderProgram;
+
+	delete voxelTexture;
 
     nodeVBO.destroy();
 	sectionVBO.destroy();
@@ -64,8 +66,8 @@ void OpenGLWindow::initializeGL()
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	//glEnable(GL_BLEND);
+	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     glEnable(GL_LINE_SMOOTH);
 	GLint range[2];
@@ -80,6 +82,12 @@ void OpenGLWindow::initializeGL()
 	glHint(GL_POINT_SMOOTH_HINT, GL_NICEST);
 	glHint(GL_POLYGON_SMOOTH_HINT, GL_NICEST);
 
+	// 启用3d纹理
+	glEnable(GL_TEXTURE_3D);
+
+	// 初始化3d纹理
+	initializeVoxelTexture();
+	
 	// 创建着色器程序
     {
 		simpleShaderProgram = new QOpenGLShaderProgram;
@@ -217,6 +225,9 @@ void OpenGLWindow::initializeGL()
 		shadedShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(NodeVertex, normalStress), 3, sizeof(NodeVertex));
 		shadedShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(NodeVertex, shearStress), 3, sizeof(NodeVertex));
 
+		shadedShaderProgram->setUniformValue("valueRange.minPosition", valueRange.minPosition);
+		shadedShaderProgram->setUniformValue("valueRange.maxPosition", valueRange.maxPosition);
+
 		shadedShaderProgram->setUniformValue("valueRange.minTotalDeformation", valueRange.minTotalDeformation);
 		shadedShaderProgram->setUniformValue("valueRange.maxTotalDeformation", valueRange.maxTotalDeformation);
 
@@ -243,6 +254,8 @@ void OpenGLWindow::initializeGL()
 
 		shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
 		shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
+
+		shadedShaderProgram->setUniformValue("voxelTexture", 0);
 	}
 
 	// 创建截面相关渲染资源
@@ -351,11 +364,12 @@ void OpenGLWindow::paintGL()
     glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
     shadedShaderProgram->bind();
+	voxelTexture->bind(0);
     shadedShaderProgram->setUniformValue("mvp", mvp);
     shadedShaderProgram->setUniformValue("mv", mv);
 	shadedShaderProgram->setUniformValue("plane.normal", plane.normal);
 	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
-
+	
 	//zoneVAO.bind();
 	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
@@ -374,7 +388,7 @@ void OpenGLWindow::paintGL()
 	//sectionShaderProgram->setUniformValue("mvp", mvp);
 
 	//sectionVAO.bind();
-	//clipExteriorMesh();
+	//clipMeshExterior();
 	//glDrawElements(GL_TRIANGLES, sectionIndexNum, GL_UNSIGNED_INT, nullptr);
 
 	//nodeShaderProgram->bind();
@@ -511,13 +525,16 @@ bool OpenGLWindow::loadDatabase()
 			nodeVertex.position[i] = query.value(i + 1).toFloat();
 		}
 
-		bound.min = qMinVec3(bound.min, nodeVertex.position);
-		bound.max = qMaxVec3(bound.max, nodeVertex.position);
-		coords.push_back(toArr3(nodeVertex.position));
+		scatterPoints.bound.min = qMinVec3(scatterPoints.bound.min, nodeVertex.position);
+		scatterPoints.bound.max = qMaxVec3(scatterPoints.bound.max, nodeVertex.position);
+		scatterPoints.coords.push_back(toArr3(nodeVertex.position));
 		mesh.vertices.append(nodeVertex.position);
 
 		nodeVertices.append(nodeVertex);
 	}
+	scatterPoints.interpBound = scatterPoints.bound.scaled(1.01f);
+	valueRange.minPosition = scatterPoints.interpBound.min;
+	valueRange.maxPosition = scatterPoints.interpBound.max;
 
 	// 查询模型所有表面对应的节点索引信息
 	//query.exec("SELECT * FROM FACETS");
@@ -599,7 +616,7 @@ bool OpenGLWindow::loadDatabase()
 		nodeVertices[index].totalDeformation = query.value(1).toFloat();
 		valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, nodeVertices[index].totalDeformation);
 		valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, nodeVertices[index].totalDeformation);
-		values.push_back(nodeVertices[index].totalDeformation);
+		scatterPoints.values.push_back(nodeVertices[index].totalDeformation);
 
 		int i = 2;
 		for (int j = 0; j < 3; ++j)
@@ -711,7 +728,7 @@ void OpenGLWindow::preprocess()
 	}
 }
 
-void OpenGLWindow::clipExteriorMesh()
+void OpenGLWindow::clipMeshExterior()
 {
 	sectionVertexNum = 0;
 	sectionIndexNum = 0;
@@ -749,7 +766,7 @@ void OpenGLWindow::clipExteriorMesh()
 
 	for (SectionVertex& vertex : sectionVertices)
 	{
-		vertex.texcoord = (vertex.position - bound.min) / (bound.max - bound.min);
+		vertex.texcoord = (vertex.position - scatterPoints.bound.min) / (scatterPoints.bound.max - scatterPoints.bound.min);
 	}
 
 	t1 = profileTimer.restart();
@@ -772,43 +789,71 @@ void OpenGLWindow::clipExteriorMesh()
 	//qDebug() << t0 << t1 << t2;
 }
 
-void OpenGLWindow::interpUniformGridData()
+void OpenGLWindow::interpUniformGrids()
 {
-	Bound scaledBound = bound;
-	scaledBound.scale(1.1f);
-	mba::point<3> low = toArr3(scaledBound.min);
-	mba::point<3> high = toArr3(scaledBound.max);
+	profileTimer.start();
+	Bound interpBound = scatterPoints.interpBound;
+	mba::point<3> low = toArr3(interpBound.min);
+	mba::point<3> high = toArr3(interpBound.max);
 
 	mba::index<3> dim = { 64, 64, 64 };
-	mba::MBA<3> interp(low, high, dim, coords, values);
+	mba::MBA<3> interp(low, high, dim, scatterPoints.coords, scatterPoints.values);
+	qDebug() << "voxel initialization time:" << profileTimer.restart();
 
-	UniformGrid uniformGrid;
-	uniformGrid.dim = dim;
-	uniformGrid.vertices.resize((dim[0] + 1) * (dim[1] + 1) * (dim[2] + 1));
-	mba::point<3> min = toArr3(bound.min);
-	mba::point<3> max = toArr3(bound.max);
+	uniformGrids.dim = dim;
+	uniformGrids.bound = interpBound;
+	uniformGrids.values.resize(dim[0] * dim[1] * dim[2]);
 
 	int index = 0;
-	for (int i = 0; i <= dim[0]; ++i)
+	mba::point<3> min = toArr3(scatterPoints.bound.min);
+	mba::point<3> max = toArr3(scatterPoints.bound.max);
+	for (int i = 0; i < dim[0]; ++i)
 	{
-		for (int j = 0; j <= dim[1]; ++j)
+		for (int j = 0; j < dim[1]; ++j)
 		{
-			for (int k = 0; k <= dim[2]; ++k)
+			for (int k = 0; k < dim[2]; ++k)
 			{
 				mba::point<3> point;
-				point[0] = qLerp<float>(min[0], max[0], (float)i / dim[0]);
-				point[1] = qLerp<float>(min[1], max[1], (float)j / dim[1]);
-				point[2] = qLerp<float>(min[2], max[2], (float)k / dim[2]);
+				point[0] = qLerp<float>(min[0], max[0], (float)i / (dim[0] - 1));
+				point[1] = qLerp<float>(min[1], max[1], (float)j / (dim[1] - 1));
+				point[2] = qLerp<float>(min[2], max[2], (float)k / (dim[2] - 1));
 
 				double value = interp(point);
-				uniformGrid.vertices[index].position = toVec3(point);
-				uniformGrid.vertices[index].totalDeformation = value;
+				uniformGrids.values[index][0] = interp(point);
 
-				//qDebug() << uniformGrid.vertices[index].position << uniformGrid.vertices[index].totalDeformation;
+				//qDebug() << point[0] << point[1] << point[2] << value;
 				index++;
 			}
 		}
 	}
+
+	qDebug() << "voxel interpolation time:" << profileTimer.restart();
+}
+
+void OpenGLWindow::initializeVoxelTexture()
+{
+	//uniformGrids.dim = { 16, 16, 16 };
+	//for (int i = 0; i < uniformGrids.dim[0]; ++i)
+	//{
+	//	for (int j = 0; j < uniformGrids.dim[1]; ++j)
+	//	{
+	//		for (int k = 0; k < uniformGrids.dim[2]; ++k)
+	//		{
+	//			uniformGrids.values.push_back(QVector4D((float)i / (uniformGrids.dim[0] - 1), (float)j / (uniformGrids.dim[1] - 1), (float)k / (uniformGrids.dim[2] - 1), 0.0f));
+	//		}
+	//	}
+	//}
+
+	// 初始化3d纹理
+	voxelTexture = new QOpenGLTexture(QOpenGLTexture::Target3D);
+	voxelTexture->create();
+	voxelTexture->setSize(uniformGrids.dim[0], uniformGrids.dim[1], uniformGrids.dim[2]);
+	voxelTexture->setFormat(QOpenGLTexture::TextureFormat::RGBA32F);
+	voxelTexture->setMinificationFilter(QOpenGLTexture::Filter::Linear);
+	voxelTexture->setMagnificationFilter(QOpenGLTexture::Filter::Linear);
+	voxelTexture->setWrapMode(QOpenGLTexture::WrapMode::ClampToEdge);
+	voxelTexture->allocateStorage(QOpenGLTexture::RGBA, QOpenGLTexture::Float32);
+	voxelTexture->setData(QOpenGLTexture::PixelFormat::RGBA, QOpenGLTexture::PixelType::Float32, uniformGrids.values.data());
 }
 
 QVector3D OpenGLWindow::toVec3(const std::array<double, 3>& arr3)

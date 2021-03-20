@@ -14,6 +14,12 @@ void Bound::scale(float s)
 	max += offset;
 }
 
+Bound Bound::scaled(float s)
+{
+	QVector3D offset = (max - min) * (s - 1.0f);
+	return Bound{ min - offset, max + offset };
+}
+
 void Bound::combine(const QVector3D& position)
 {
 	min = qMinVec3(min, position);

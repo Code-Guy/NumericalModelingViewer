@@ -29,6 +29,7 @@ struct Bound
 	int intersectFlag;
 
 	void scale(float s);
+	Bound scaled(float s);
 	void combine(const QVector3D& position);
 	void combine(const Bound& bound);
 	int maxDim();
