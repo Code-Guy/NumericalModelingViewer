@@ -3,7 +3,6 @@
 
 #include <QOpenGLWidget>
 #include <QOpenGLFunctions>
-#include <QOpenGLTexture>
 #include <QOpenGLBuffer>
 #include <QOpenGLPixelTransferOptions>
 #include <QOpenGLVertexArrayObject>
@@ -13,7 +12,6 @@
 #include <QElapsedTimer>
 #include <QTimer>
 #include <vector>
-#include <mba/mba.hpp>
 
 #include "geoutil.h"
 
@@ -39,9 +37,6 @@ struct SectionVertex
 
 struct ValueRange
 {
-	QVector3D minPosition = kMaxVec3;
-	QVector3D maxPosition = kMinVec3;
-
 	float minTotalDeformation = kMaxVal;
 	float maxTotalDeformation = kMinVal;
 
@@ -94,19 +89,11 @@ struct Facet
 	quint32 indices[4];
 };
 
-struct ScatterPoints
-{
-	Bound bound;
-	Bound interpBound;
-	std::vector<mba::point<3>> coords;
-	std::vector<double> values;
-};
-
 struct UniformGrids
 {
-	std::array<size_t, 3> dim;
+	int dim[3];
 	Bound bound;
-	std::vector<QVector4D> values;
+	std::vector<NodeVertex> values;
 };
 
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
@@ -131,8 +118,6 @@ private:
     bool loadDatabase();
 	void preprocess();
 	void clipMeshExterior();
-	void interpUniformGrids();
-	void initializeVoxelTexture();
 
     QVector3D toVec3(const std::array<double, 3>& arr3);
     std::array<double, 3> toArr3(const QVector3D& vec3);
@@ -188,9 +173,7 @@ private:
     QElapsedTimer globalElapsedTimer;
     QElapsedTimer profileTimer;
 
-	ScatterPoints scatterPoints;
 	UniformGrids uniformGrids;
-	QOpenGLTexture* voxelTexture;
 };
 
 #endif // OPENGLWINDOW_H

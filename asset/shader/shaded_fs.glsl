@@ -21,9 +21,6 @@ struct Plane
 
 struct ValueRange
 {
-	vec3 minPosition;
-	vec3 maxPosition;
-
 	float minTotalDeformation;
 	float maxTotalDeformation;
 
@@ -54,7 +51,6 @@ struct ValueRange
 
 uniform Plane plane;
 uniform ValueRange valueRange;
-uniform sampler3D voxelTexture;
 
 const vec3 heatmapColors[5] = vec3[5](
 	vec3(0, 0, 1), vec3(0, 1, 1), vec3(0, 1, 0), vec3(1, 1, 0), vec3(1, 0, 0)
@@ -83,13 +79,7 @@ void main()
 	// 	return;
 	// }
 
-	//float value = VTotalDeformation;
-
-	vec3 texcoord = (VPosition - valueRange.minPosition) / (valueRange.maxPosition - valueRange.minPosition);
-	float value = texture(voxelTexture, texcoord).r;
-
-	FColor = vec4(calcHeatmapColor(value, valueRange.minTotalDeformation, valueRange.maxTotalDeformation), 1.0);
-	//FColor = vec4(texcoord, 1.0);
+	FColor = vec4(calcHeatmapColor(VTotalDeformation, valueRange.minTotalDeformation, valueRange.maxTotalDeformation), 1.0);
 	//FColor = vec4(1.0, 1.0, 1.0, 1.0);
 
 	// gamma correction
