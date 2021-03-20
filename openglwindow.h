@@ -67,7 +67,7 @@ struct ValueRange
 
 enum ZoneType
 {
-    W6, B8
+    Brick, Wedge, Pyramid, DegeneratedBrick, Tetrahedron
 };
 
 enum FacetType

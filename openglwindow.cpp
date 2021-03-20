@@ -7,16 +7,16 @@
 #include <QSqlRecord>
 #include <QMessageBox>
 
-OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent) 
+OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 {
-    // 设置窗口属性
-    setFocusPolicy(Qt::FocusPolicy::ClickFocus);
+	// 设置窗口属性
+	setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
-    // 加载数据
+	// 加载数据
 	loadDatabase();
 	preprocess();
 
-    // 初始化摄像机
+	// 初始化摄像机
 	camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
 	camera->setFovy(60.0f);
@@ -24,20 +24,20 @@ OpenGLWindow::OpenGLWindow(QWidget *parent) : QOpenGLWidget(parent)
 
 OpenGLWindow::~OpenGLWindow()
 {
-    makeCurrent();
+	makeCurrent();
 
-    delete camera;
+	delete camera;
 
 	delete simpleShaderProgram;
 	delete nodeShaderProgram;
-    delete wireframeShaderProgram;
-    delete shadedShaderProgram;
+	delete wireframeShaderProgram;
+	delete shadedShaderProgram;
 	delete sectionShaderProgram;
 
-    nodeVBO.destroy();
+	nodeVBO.destroy();
 	sectionVBO.destroy();
-    wireframeVAO.destroy();
-    wireframeIBO.destroy();
+	wireframeVAO.destroy();
+	wireframeIBO.destroy();
 	zoneVAO.destroy();
 	zoneIBO.destroy();
 	facetVAO.destroy();
@@ -48,28 +48,28 @@ OpenGLWindow::~OpenGLWindow()
 	objVBO.destroy();
 	objIBO.destroy();
 
-    doneCurrent();
+	doneCurrent();
 }
 
-void OpenGLWindow::initializeGL() 
+void OpenGLWindow::initializeGL()
 {
-    initializeOpenGLFunctions();
+	initializeOpenGLFunctions();
 
-    // 设置OGL状态
-    glFrontFace(GL_CCW);
-    glCullFace(GL_BACK);
-    //glEnable(GL_CULL_FACE);
+	// 设置OGL状态
+	glFrontFace(GL_CCW);
+	glCullFace(GL_BACK);
+	glEnable(GL_CULL_FACE);
 
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 
 	//glEnable(GL_BLEND);
 	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glEnable(GL_LINE_SMOOTH);
+	glEnable(GL_LINE_SMOOTH);
 	GLint range[2];
 	glGetIntegerv(GL_SMOOTH_LINE_WIDTH_RANGE, range);
-    glLineWidth(range[1]);
+	glLineWidth(range[1]);
 
 	glEnable(GL_POINT_SMOOTH);
 	glEnable(GL_PROGRAM_POINT_SIZE);
@@ -83,7 +83,7 @@ void OpenGLWindow::initializeGL()
 	glEnable(GL_TEXTURE_3D);
 
 	// 创建着色器程序
-    {
+	{
 		simpleShaderProgram = new QOpenGLShaderProgram;
 		bool success = simpleShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/simple_vs.glsl");
 		Q_ASSERT_X(success, "simpleShaderProgram", qPrintable(simpleShaderProgram->log()));
@@ -102,10 +102,10 @@ void OpenGLWindow::initializeGL()
 
 		wireframeShaderProgram = new QOpenGLShaderProgram;
 		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
-        Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
+		Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
 
 		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/wireframe_fs.glsl");
-        Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
+		Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
 		wireframeShaderProgram->link();
 
 		shadedShaderProgram = new QOpenGLShaderProgram;
@@ -123,8 +123,8 @@ void OpenGLWindow::initializeGL()
 		success = sectionShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/section_fs.glsl");
 		Q_ASSERT_X(success, "sectionShaderProgram", qPrintable(sectionShaderProgram->log()));
 		sectionShaderProgram->link();
-    }
-	
+	}
+
 	// 创建基础节点顶点缓存对象
 	nodeVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
 	nodeVBO.create();
@@ -143,8 +143,8 @@ void OpenGLWindow::initializeGL()
 		nodeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
 	}
 
-    // 创建线框模式相关渲染资源
-    {
+	// 创建线框模式相关渲染资源
+	{
 		// create the vertex array object
 		wireframeVAO.create();
 		wireframeVAO.bind();
@@ -161,10 +161,10 @@ void OpenGLWindow::initializeGL()
 		wireframeShaderProgram->bind();
 		wireframeShaderProgram->enableAttributeArray(0);
 		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
-    }
-    
-    // 创建单元模式相关渲染资源
-    {
+	}
+
+	// 创建单元模式相关渲染资源
+	{
 		zoneVAO.create();
 		zoneVAO.bind();
 		nodeVBO.bind();
@@ -175,25 +175,6 @@ void OpenGLWindow::initializeGL()
 		zoneIBO.bind();
 		zoneIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(uint32_t));
-
-		// connect the inputs to the shader program
-		shadedShaderProgram->bind();
-		shadedShaderProgram->enableAttributeArray(0);
-		shadedShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
-    }
-
-	// 创建Face相关渲染资源
-	{
-		facetVAO.create();
-		facetVAO.bind();
-		nodeVBO.bind();
-
-		// create the index buffer object
-		facetIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		facetIBO.create();
-		facetIBO.bind();
-		facetIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(uint32_t));
 
 		// connect the inputs to the shader program
 		shadedShaderProgram->bind();
@@ -245,8 +226,20 @@ void OpenGLWindow::initializeGL()
 
 		shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
 		shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
+	}
 
-		shadedShaderProgram->setUniformValue("voxelTexture", 0);
+	// 创建Face相关渲染资源
+	{
+		facetVAO.create();
+		facetVAO.bind();
+		nodeVBO.bind();
+
+		// create the index buffer object
+		facetIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		facetIBO.create();
+		facetIBO.bind();
+		facetIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(uint32_t));
 	}
 
 	// 创建截面相关渲染资源
@@ -259,7 +252,7 @@ void OpenGLWindow::initializeGL()
 
 		sectionVAO.create();
 		sectionVAO.bind();
-		
+
 		sectionVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
 		sectionVBO.create();
 		sectionVBO.bind();
@@ -309,29 +302,29 @@ void OpenGLWindow::initializeGL()
 		//simpleShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
 	}
 
-    // 初始化计时器
-    deltaElapsedTimer.start();
+	// 初始化计时器
+	deltaElapsedTimer.start();
 	globalElapsedTimer.start();
 	connect(&updateTimer, SIGNAL(timeout()), this, SLOT(update()));
-    updateTimer.start(16);
+	updateTimer.start(16);
 }
 
-void OpenGLWindow::resizeGL(int w, int h) 
+void OpenGLWindow::resizeGL(int w, int h)
 {
-    camera->setAspect((float)w / h);
+	camera->setAspect((float)w / h);
 }
 
-void OpenGLWindow::paintGL() 
+void OpenGLWindow::paintGL()
 {
-    // 计算deltaTime
-    float deltaTime = deltaElapsedTimer.elapsed() * 0.001f;
-    deltaElapsedTimer.start();
-    
+	// 计算deltaTime
+	float deltaTime = deltaElapsedTimer.elapsed() * 0.001f;
+	deltaElapsedTimer.start();
+
 	// 更新窗口标题，显示帧率
 	window()->setWindowTitle(QString("Numerical Modeling Viewer    | %1 FPS").arg((int)(1.0f / deltaTime)));
 
-    // 更新摄像机
-    camera->tick(deltaTime);
+	// 更新摄像机
+	camera->tick(deltaTime);
 
 	// 每帧更新切割面，切割模型
 	float globalTime = globalElapsedTimer.elapsed() * 0.001f;
@@ -340,31 +333,31 @@ void OpenGLWindow::paintGL()
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
 
-    glClearColor(0.7, 0.7, 0.7, 1.0);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-   
-    QMatrix4x4 m;
-    QMatrix4x4 v = camera->getViewMatrix();
-    QMatrix4x4 mv = v * m;
-    QMatrix4x4 mvp = camera->getPerspectiveMatrix() * mv;
+	glClearColor(0.7, 0.7, 0.7, 1.0);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    wireframeShaderProgram->bind();
-    wireframeShaderProgram->setUniformValue("mvp", mvp);
+	QMatrix4x4 m;
+	QMatrix4x4 v = camera->getViewMatrix();
+	QMatrix4x4 mv = v * m;
+	QMatrix4x4 mvp = camera->getPerspectiveMatrix() * mv;
 
-    wireframeVAO.bind();
-    glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	wireframeShaderProgram->bind();
+	wireframeShaderProgram->setUniformValue("mvp", mvp);
 
-    shadedShaderProgram->bind();
-    shadedShaderProgram->setUniformValue("mvp", mvp);
-    shadedShaderProgram->setUniformValue("mv", mv);
+	wireframeVAO.bind();
+	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	shadedShaderProgram->bind();
+	shadedShaderProgram->setUniformValue("mvp", mvp);
+	shadedShaderProgram->setUniformValue("mv", mv);
 	shadedShaderProgram->setUniformValue("plane.normal", plane.normal);
 	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
-	
-	//zoneVAO.bind();
-	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	facetVAO.bind();
-	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
+	zoneVAO.bind();
+	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	//facetVAO.bind();
+	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	//simpleShaderProgram->bind();
 	//simpleShaderProgram->setUniformValue("mvp", mvp);
@@ -390,27 +383,27 @@ void OpenGLWindow::paintGL()
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
 {
-    camera->onMousePressed(event->button(), event->x(), event->y());
+	camera->onMousePressed(event->button(), event->x(), event->y());
 }
 
 void OpenGLWindow::mouseReleaseEvent(QMouseEvent* event)
 {
-    camera->onMouseReleased(event->button());
+	camera->onMouseReleased(event->button());
 }
 
 void OpenGLWindow::mouseMoveEvent(QMouseEvent* event)
 {
-    camera->onMouseMoved(event->x(), event->y());
+	camera->onMouseMoved(event->x(), event->y());
 }
 
 void OpenGLWindow::keyPressEvent(QKeyEvent* event)
 {
-    camera->onKeyPressed(event->key());
+	camera->onKeyPressed(event->key());
 }
 
 void OpenGLWindow::keyReleaseEvent(QKeyEvent* event)
 {
-    camera->onKeyReleased(event->key());
+	camera->onKeyReleased(event->key());
 }
 
 bool OpenGLWindow::loadDatabase()
@@ -427,86 +420,9 @@ bool OpenGLWindow::loadDatabase()
 		return false;
 	}
 
-	// 查询网格单元类型信息
-	QSqlQuery query("SELECT * FROM ELETYPE");
-	QSqlRecord record = query.record();
-	while (query.next()) 
-	{
-		int zoneType = query.value(0).toInt();
-		zoneTypes.append(zoneType);
-	}
-
-	// 查询网格单元节点索引
-	query.exec("SELECT * FROM ELEMENTS");
-	record = query.record();
-	while (query.next()) 
-	{
-		Zone zone;
-		zone.type = (ZoneType)query.value(1).toInt();
-		zone.num = query.value(2).toInt();
-		for (int i = 0; i < zone.num; ++i)
-		{
-			zone.indices[i] = query.value(i + 3).toInt() - 1;
-		}
-		
-		zones.append(zone);
-
-		if (zone.num == 8)
-		{
-			//wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-			//	zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[2], zone.indices[4],
-			//	zone.indices[1], zone.indices[4], zone.indices[7], zone.indices[5], zone.indices[2],
-			//	zone.indices[5], zone.indices[3], zone.indices[5], zone.indices[7], zone.indices[6],
-			//	zone.indices[1], zone.indices[6], zone.indices[3], zone.indices[6], zone.indices[7] });
-
-			zoneIndices.append({ zone.indices[0], zone.indices[2], zone.indices[1],
-				zone.indices[2], zone.indices[4], zone.indices[1],
-				zone.indices[0], zone.indices[3], zone.indices[2],
-				zone.indices[3], zone.indices[5], zone.indices[2],
-				zone.indices[0], zone.indices[1], zone.indices[3],
-				zone.indices[1], zone.indices[6], zone.indices[3],
-				zone.indices[2], zone.indices[5], zone.indices[4],
-				zone.indices[5], zone.indices[7], zone.indices[4],
-				zone.indices[1], zone.indices[4], zone.indices[7],
-				zone.indices[1], zone.indices[7], zone.indices[6],
-				zone.indices[3], zone.indices[7], zone.indices[5],
-				zone.indices[3], zone.indices[6], zone.indices[7]
-				});
-		}
-		else if (zone.num == 6)
-		{
-			//wireframeIndices.append({ zone.indices[0], zone.indices[1], zone.indices[0], zone.indices[2],
-			//	zone.indices[0], zone.indices[3], zone.indices[4], zone.indices[1], zone.indices[4],
-			//	zone.indices[2], zone.indices[4], zone.indices[5], zone.indices[5], zone.indices[2],
-			//	zone.indices[5], zone.indices[3], zone.indices[1], zone.indices[3] });
-
-			zoneIndices.append({ zone.indices[2], zone.indices[5], zone.indices[4],
-			zone.indices[0], zone.indices[1], zone.indices[3],
-			zone.indices[1], zone.indices[4], zone.indices[3],
-			zone.indices[3], zone.indices[4], zone.indices[5],
-			zone.indices[0], zone.indices[3], zone.indices[5],
-			zone.indices[0], zone.indices[5], zone.indices[2],
-			zone.indices[0], zone.indices[2], zone.indices[4],
-			zone.indices[0], zone.indices[4], zone.indices[1]
-				});
-		}
-	}
- 
-	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
-	//query.exec("SELECT * FROM ELEMEDGES");
-	//record = query.record();
-	//while (query.next())
-	//{
-	//	int num = query.value(2).toInt() * 2;
-	//	for (int i = 0; i < num; ++i)
-	//	{
-	//		wireframeIndices.append(query.value(i + 3).toInt() - 1);
-	//	}
-	//}
-
 	// 查询节点索引及空间坐标
-	query.exec("SELECT * FROM NODES");
-	record = query.record();
+	QSqlQuery query("SELECT * FROM NODES");
+	QSqlRecord record = query.record();
 	while (query.next())
 	{
 		NodeVertex nodeVertex;
@@ -520,6 +436,78 @@ bool OpenGLWindow::loadDatabase()
 		mesh.vertices.append(nodeVertex.position);
 
 		nodeVertices.append(nodeVertex);
+	}
+
+	// 查询网格单元类型信息
+	query.exec("SELECT * FROM ELETYPE");
+	record = query.record();
+	while (query.next())
+	{
+		int zoneType = query.value(0).toInt();
+		zoneTypes.append(zoneType);
+	}
+
+	// 查询网格单元节点索引
+	query.exec("SELECT * FROM ELEMENTS");
+	record = query.record();
+
+	int index = 0;
+	while (query.next())
+	{
+		Zone zone;
+		int type = query.value(1).toInt();
+		if (type == 1)
+		{
+			zone.type = Brick;
+		}
+		else if (type == 2)
+		{
+			zone.type = Tetrahedron;
+		}
+
+		zone.num = query.value(2).toInt();
+		for (int i = 0; i < zone.num; ++i)
+		{
+			zone.indices[i] = query.value(i + 3).toInt() - 1;
+		}
+		zones.append(zone);
+
+		if (zone.num == 8)
+		{
+			zoneIndices.append({ zone.indices[0], zone.indices[3], zone.indices[1],
+				zone.indices[1], zone.indices[3], zone.indices[2],
+				zone.indices[4], zone.indices[5], zone.indices[7],
+				zone.indices[5], zone.indices[6], zone.indices[7],
+				zone.indices[0], zone.indices[1], zone.indices[4],
+				zone.indices[1], zone.indices[5], zone.indices[4],
+				zone.indices[1], zone.indices[2], zone.indices[5],
+				zone.indices[2], zone.indices[6], zone.indices[5],
+				zone.indices[2], zone.indices[3], zone.indices[7],
+				zone.indices[2], zone.indices[7], zone.indices[6],
+				zone.indices[3], zone.indices[0], zone.indices[4],
+				zone.indices[3], zone.indices[4], zone.indices[7]
+				});
+		}
+		else if (zone.num == 4)
+		{
+			zoneIndices.append({ zone.indices[0], zone.indices[1], zone.indices[3],
+				zone.indices[0], zone.indices[3], zone.indices[2],
+				zone.indices[1], zone.indices[2], zone.indices[3],
+				zone.indices[0], zone.indices[2], zone.indices[1],
+				});
+		}
+	}
+
+	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
+	query.exec("SELECT * FROM ELEMEDGES");
+	record = query.record();
+	while (query.next())
+	{
+		int num = query.value(2).toInt() * 2;
+		for (int i = 0; i < num; ++i)
+		{
+			wireframeIndices.append(query.value(i + 3).toInt() - 1);
+		}
 	}
 
 	// 查询模型所有表面对应的节点索引信息
@@ -538,60 +526,60 @@ bool OpenGLWindow::loadDatabase()
 	//}
 
 	// 查询模型所有外表面对应的节点索引信息
-	query.exec("SELECT * FROM EXTERIOR");
-	record = query.record();
-	while (query.next())
-	{
-		Facet facet;
-		facet.num = query.value(3).toInt();
-		QSet<uint32_t> indexSet;
-		for (int i = 0; i < facet.num; ++i)
-		{
-			facet.indices[i] = query.value(i + 4).toInt() - 1;
-			indexSet.insert(facet.indices[i]);
-		}
+	//query.exec("SELECT * FROM EXTERIOR");
+	//record = query.record();
+	//while (query.next())
+	//{
+	//	Facet facet;
+	//	facet.num = query.value(3).toInt();
+	//	QSet<uint32_t> indexSet;
+	//	for (int i = 0; i < facet.num; ++i)
+	//	{
+	//		facet.indices[i] = query.value(i + 4).toInt() - 1;
+	//		indexSet.insert(facet.indices[i]);
+	//	}
 
-		if (indexSet.count() == 2)
-		{
-			continue;
-		}
+	//	if (indexSet.count() == 2)
+	//	{
+	//		continue;
+	//	}
 
-		if (indexSet.count() < facet.num && indexSet.count() == 3)
-		{
-			facet.num = 3;
-		}
-		facets.append(facet);
+	//	if (indexSet.count() < facet.num && indexSet.count() == 3)
+	//	{
+	//		facet.num = 3;
+	//	}
+	//	facets.append(facet);
 
-		QVector<uint32_t> indices;
-		if (facet.num == 3)
-		{
-			indices.append({ facet.indices[0], facet.indices[1], facet.indices[2] });
-			wireframeIndices.append({ facet.indices[0], facet.indices[1],
-				facet.indices[0], facet.indices[2],
-				facet.indices[1], facet.indices[2] });
-		}
-		else if (facet.num == 4)
-		{
-			indices.append({
-				facet.indices[0], facet.indices[1], facet.indices[2],
-				facet.indices[0], facet.indices[2], facet.indices[3]
-				});
-			wireframeIndices.append({ facet.indices[0], facet.indices[1],
-				facet.indices[1], facet.indices[2],
-				facet.indices[2], facet.indices[3],
-				facet.indices[3], facet.indices[0] });
-		}
+	//	QVector<uint32_t> indices;
+	//	if (facet.num == 3)
+	//	{
+	//		indices.append({ facet.indices[0], facet.indices[1], facet.indices[2] });
+	//		wireframeIndices.append({ facet.indices[0], facet.indices[1],
+	//			facet.indices[0], facet.indices[2],
+	//			facet.indices[1], facet.indices[2] });
+	//	}
+	//	else if (facet.num == 4)
+	//	{
+	//		indices.append({
+	//			facet.indices[0], facet.indices[1], facet.indices[2],
+	//			facet.indices[0], facet.indices[2], facet.indices[3]
+	//			});
+	//		wireframeIndices.append({ facet.indices[0], facet.indices[1],
+	//			facet.indices[1], facet.indices[2],
+	//			facet.indices[2], facet.indices[3],
+	//			facet.indices[3], facet.indices[0] });
+	//	}
 
-		facetIndices.append(indices);
-		for (int i = 0; i < indices.count(); i += 3)
-		{
-			uint32_t v0 = indices[i];
-			uint32_t v1 = indices[i + 1];
-			uint32_t v2 = indices[i + 2];
+	//	facetIndices.append(indices);
+	//	for (int i = 0; i < indices.count(); i += 3)
+	//	{
+	//		uint32_t v0 = indices[i];
+	//		uint32_t v1 = indices[i + 1];
+	//		uint32_t v2 = indices[i + 2];
 
-			GeoUtil::addFace(mesh, v0, v1, v2);
-		}
-	}
+	//		GeoUtil::addFace(mesh, v0, v1, v2);
+	//	}
+	//}
 
 	// 查询每个节点对应的计算结果值
 	query.exec("SELECT * FROM RESULTS");
@@ -698,19 +686,19 @@ void OpenGLWindow::preprocess()
 
 	//qDebug() << loadTime << buildTime << copyTime << clipTime;
 
-	GeoUtil::cleanMesh(mesh);
-	GeoUtil::fixWindingOrder(mesh);
-	bool result = GeoUtil::validateMesh(mesh);
-	Q_ASSERT_X(result, "preprocess", "mesh is not valid!");
+	//GeoUtil::cleanMesh(mesh);
+	//GeoUtil::fixWindingOrder(mesh);
+	//bool result = GeoUtil::validateMesh(mesh);
+	//Q_ASSERT_X(result, "preprocess", "mesh is not valid!");
 
-	facetIndices.resize(mesh.faces.count() * 3);
-	for (int i = 0; i < mesh.faces.count(); ++i)
-	{
-		for (int j = 0; j < 3; ++j)
-		{
-			facetIndices[i * 3 + j] = mesh.faces[i].vertices[j];
-		}
-	}
+	//facetIndices.resize(mesh.faces.count() * 3);
+	//for (int i = 0; i < mesh.faces.count(); ++i)
+	//{
+	//	for (int j = 0; j < 3; ++j)
+	//	{
+	//		facetIndices[i * 3 + j] = mesh.faces[i].vertices[j];
+	//	}
+	//}
 }
 
 void OpenGLWindow::clipMeshExterior()
