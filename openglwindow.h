@@ -15,87 +15,6 @@
 
 #include "geoutil.h"
 
-struct NodeVertex
-{
-	QVector3D position;
-	float totalDeformation;
-	QVector3D deformation;
-	QVector3D normalElasticStrain;
-	QVector3D shearElasticStrain;
-	float maximumPrincipalStress;
-	float middlePrincipalStress;
-	float minimumPrincipalStress;
-	QVector3D normalStress;
-	QVector3D shearStress;
-};
-
-struct SectionVertex
-{
-	QVector3D position;
-	QVector3D texcoord;
-};
-
-struct ValueRange
-{
-	float minTotalDeformation = kMaxVal;
-	float maxTotalDeformation = kMinVal;
-
-	QVector3D minDeformation = kMaxVec3;
-	QVector3D maxDeformation = kMinVec3;
-
-	QVector3D minNormalElasticStrain = kMaxVec3;
-	QVector3D maxNormalElasticStrain = kMinVec3;
-
-	QVector3D minShearElasticStrain = kMaxVec3;
-	QVector3D maxShearElasticStrain = kMinVec3;
-
-	float minMaximumPrincipalStress = kMaxVal;
-	float maxMaximumPrincipalStress = kMinVal;
-
-	float minMiddlePrincipalStress = kMaxVal;
-	float maxMiddlePrincipalStress = kMinVal;
-
-	float minMinimumPrincipalStress = kMaxVal;
-	float maxMinimumPrincipalStress = kMinVal;
-
-	QVector3D minNormalStress = kMaxVec3;
-	QVector3D maxNormalStress = kMinVec3;
-
-	QVector3D minShearStress = kMaxVec3;
-	QVector3D maxShearStress = kMinVec3;
-};
-
-enum ZoneType
-{
-    Brick, Wedge, Pyramid, DegeneratedBrick, Tetrahedron
-};
-
-enum FacetType
-{
-	Q4, T3
-};
-
-struct Zone
-{
-    ZoneType type;
-    int num;
-    quint32 indices[8];
-};
-
-struct Facet
-{
-	FacetType type;
-	int num;
-	quint32 indices[4];
-};
-
-struct UniformGrids
-{
-	int dim[3];
-	Bound bound;
-	std::vector<NodeVertex> values;
-};
-
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
@@ -117,7 +36,10 @@ protected:
 private:
     bool loadDatabase();
 	void preprocess();
-	void clipMeshExterior();
+    void clipZones();
+
+    void bindWireframeShaderProgram();
+    void bindShadedShaderProgram();
 
     QVector3D toVec3(const std::array<double, 3>& arr3);
     std::array<double, 3> toArr3(const QVector3D& vec3);
@@ -132,14 +54,10 @@ private:
     ValueRange valueRange;
 	QVector<int> zoneTypes;
 
-    QOpenGLShaderProgram* simpleShaderProgram;
-    QOpenGLShaderProgram* nodeShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
 	QOpenGLShaderProgram* shadedShaderProgram;
-    QOpenGLShaderProgram* sectionShaderProgram;
 
     QOpenGLBuffer nodeVBO;
-    QOpenGLVertexArrayObject nodeVAO;
 
     QOpenGLVertexArrayObject wireframeVAO;
     QVector<uint32_t> wireframeIndices;
@@ -155,11 +73,13 @@ private:
 
     QOpenGLBuffer sectionVBO;
 	QOpenGLVertexArrayObject sectionVAO;
-    QVector<SectionVertex> sectionVertices;
+    QOpenGLBuffer sectionIBO;
+    QVector<NodeVertex> sectionVertices;
 	QVector<uint32_t> sectionIndices;
-	QOpenGLBuffer sectionIBO;
-	int sectionVertexNum;
-	int sectionIndexNum;
+
+	QOpenGLVertexArrayObject sectionWireframeVAO;
+	QOpenGLBuffer sectionWireframeIBO;
+	QVector<uint32_t> sectionWireframeIndices;
 
 	QOpenGLBuffer objVBO;
 	QOpenGLVertexArrayObject objVAO;

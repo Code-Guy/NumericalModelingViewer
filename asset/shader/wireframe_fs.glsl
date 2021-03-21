@@ -1,9 +1,31 @@
 #version 420
 
-in vec4 fragColor;
-out vec4 outColor;
+struct Plane
+{
+	vec3 normal;
+	float dist;
+};
+
+uniform Plane plane;
+uniform bool skipClip;
+
+in vec4 VColor;
+in vec3 VPosition;
+
+out vec4 FColor;
+
+bool isOnPositiveSideOfPlane(vec3 point, float epsilon = 0.01f)
+{
+	return dot(plane.normal, point) > plane.dist + epsilon;
+}
 
 void main()
 {
-	outColor = fragColor;
+	if (!skipClip && !isOnPositiveSideOfPlane(VPosition, 1.0f))
+	{
+		discard;
+		return;
+	}
+
+	FColor = VColor;
 }

@@ -28,14 +28,10 @@ OpenGLWindow::~OpenGLWindow()
 
 	delete camera;
 
-	delete simpleShaderProgram;
-	delete nodeShaderProgram;
 	delete wireframeShaderProgram;
 	delete shadedShaderProgram;
-	delete sectionShaderProgram;
 
 	nodeVBO.destroy();
-	sectionVBO.destroy();
 	wireframeVAO.destroy();
 	wireframeIBO.destroy();
 	zoneVAO.destroy();
@@ -43,7 +39,10 @@ OpenGLWindow::~OpenGLWindow()
 	facetVAO.destroy();
 	facetIBO.destroy();
 	sectionVAO.destroy();
+	sectionVBO.destroy();
 	sectionIBO.destroy();
+	sectionWireframeVAO.destroy();
+	sectionWireframeIBO.destroy();
 	objVAO.destroy();
 	objVBO.destroy();
 	objIBO.destroy();
@@ -84,24 +83,8 @@ void OpenGLWindow::initializeGL()
 
 	// 创建着色器程序
 	{
-		simpleShaderProgram = new QOpenGLShaderProgram;
-		bool success = simpleShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/simple_vs.glsl");
-		Q_ASSERT_X(success, "simpleShaderProgram", qPrintable(simpleShaderProgram->log()));
-
-		success = simpleShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/simple_fs.glsl");
-		Q_ASSERT_X(success, "simpleShaderProgram", qPrintable(simpleShaderProgram->log()));
-		simpleShaderProgram->link();
-
-		nodeShaderProgram = new QOpenGLShaderProgram;
-		success = nodeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/node_vs.glsl");
-		Q_ASSERT_X(success, "nodeShaderProgram", qPrintable(nodeShaderProgram->log()));
-
-		success = nodeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/node_fs.glsl");
-		Q_ASSERT_X(success, "nodeShaderProgram", qPrintable(nodeShaderProgram->log()));
-		nodeShaderProgram->link();
-
 		wireframeShaderProgram = new QOpenGLShaderProgram;
-		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
+		bool success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
 		Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
 
 		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/wireframe_fs.glsl");
@@ -115,14 +98,6 @@ void OpenGLWindow::initializeGL()
 		success = shadedShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/shaded_fs.glsl");
 		Q_ASSERT_X(success, "shadedShaderProgram", qPrintable(shadedShaderProgram->log()));
 		shadedShaderProgram->link();
-
-		sectionShaderProgram = new QOpenGLShaderProgram;
-		success = sectionShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/section_vs.glsl");
-		Q_ASSERT_X(success, "sectionShaderProgram", qPrintable(sectionShaderProgram->log()));
-
-		success = sectionShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/section_fs.glsl");
-		Q_ASSERT_X(success, "sectionShaderProgram", qPrintable(sectionShaderProgram->log()));
-		sectionShaderProgram->link();
 	}
 
 	// 创建基础节点顶点缓存对象
@@ -131,17 +106,6 @@ void OpenGLWindow::initializeGL()
 	nodeVBO.bind();
 	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 	nodeVBO.allocate(nodeVertices.constData(), nodeVertices.count() * sizeof(NodeVertex));
-
-	// 创建基础节点相关渲染资源
-	{
-		nodeVAO.create();
-		nodeVAO.bind();
-		nodeVBO.bind();
-
-		nodeShaderProgram->bind();
-		nodeShaderProgram->enableAttributeArray(0);
-		nodeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
-	}
 
 	// 创建线框模式相关渲染资源
 	{
@@ -157,10 +121,7 @@ void OpenGLWindow::initializeGL()
 		wireframeIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 		wireframeIBO.allocate(wireframeIndices.constData(), wireframeIndices.count() * sizeof(uint32_t));
 
-		// connect the inputs to the shader program
-		wireframeShaderProgram->bind();
-		wireframeShaderProgram->enableAttributeArray(0);
-		wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
+		bindWireframeShaderProgram();
 	}
 
 	// 创建单元模式相关渲染资源
@@ -175,57 +136,7 @@ void OpenGLWindow::initializeGL()
 		zoneIBO.bind();
 		zoneIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(uint32_t));
-
-		// connect the inputs to the shader program
-		shadedShaderProgram->bind();
-		shadedShaderProgram->enableAttributeArray(0);
-		shadedShaderProgram->enableAttributeArray(1);
-		shadedShaderProgram->enableAttributeArray(2);
-		shadedShaderProgram->enableAttributeArray(3);
-		shadedShaderProgram->enableAttributeArray(4);
-		shadedShaderProgram->enableAttributeArray(5);
-		shadedShaderProgram->enableAttributeArray(6);
-		shadedShaderProgram->enableAttributeArray(7);
-		shadedShaderProgram->enableAttributeArray(8);
-		shadedShaderProgram->enableAttributeArray(9);
-
-		shadedShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(NodeVertex, totalDeformation), 1, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(2, GL_FLOAT, offsetof(NodeVertex, deformation), 3, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(3, GL_FLOAT, offsetof(NodeVertex, normalElasticStrain), 3, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(4, GL_FLOAT, offsetof(NodeVertex, shearElasticStrain), 3, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(5, GL_FLOAT, offsetof(NodeVertex, maximumPrincipalStress), 1, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(6, GL_FLOAT, offsetof(NodeVertex, middlePrincipalStress), 1, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(7, GL_FLOAT, offsetof(NodeVertex, minimumPrincipalStress), 1, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(NodeVertex, normalStress), 3, sizeof(NodeVertex));
-		shadedShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(NodeVertex, shearStress), 3, sizeof(NodeVertex));
-
-		shadedShaderProgram->setUniformValue("valueRange.minTotalDeformation", valueRange.minTotalDeformation);
-		shadedShaderProgram->setUniformValue("valueRange.maxTotalDeformation", valueRange.maxTotalDeformation);
-
-		shadedShaderProgram->setUniformValue("valueRange.minDeformation", valueRange.minDeformation);
-		shadedShaderProgram->setUniformValue("valueRange.maxDeformation", valueRange.maxDeformation);
-
-		shadedShaderProgram->setUniformValue("valueRange.minNormalElasticStrain", valueRange.minNormalElasticStrain);
-		shadedShaderProgram->setUniformValue("valueRange.maxNormalElasticStrain", valueRange.maxNormalElasticStrain);
-
-		shadedShaderProgram->setUniformValue("valueRange.minShearElasticStrain", valueRange.minShearElasticStrain);
-		shadedShaderProgram->setUniformValue("valueRange.maxShearElasticStrain", valueRange.maxShearElasticStrain);
-
-		shadedShaderProgram->setUniformValue("valueRange.minMaximumPrincipalStress", valueRange.minMaximumPrincipalStress);
-		shadedShaderProgram->setUniformValue("valueRange.maxMaximumPrincipalStress", valueRange.maxMaximumPrincipalStress);
-
-		shadedShaderProgram->setUniformValue("valueRange.minMiddlePrincipalStress", valueRange.minMiddlePrincipalStress);
-		shadedShaderProgram->setUniformValue("valueRange.maxMiddlePrincipalStress", valueRange.maxMiddlePrincipalStress);
-
-		shadedShaderProgram->setUniformValue("valueRange.minMinimumPrincipalStress", valueRange.minMinimumPrincipalStress);
-		shadedShaderProgram->setUniformValue("maxMinimumPrincipalStress", valueRange.maxMinimumPrincipalStress);
-
-		shadedShaderProgram->setUniformValue("valueRange.minNormalStress", valueRange.minNormalStress);
-		shadedShaderProgram->setUniformValue("valueRange.maxNormalStress", valueRange.maxNormalStress);
-
-		shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
-		shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
+		bindShadedShaderProgram();
 	}
 
 	// 创建Face相关渲染资源
@@ -240,15 +151,14 @@ void OpenGLWindow::initializeGL()
 		facetIBO.bind();
 		facetIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(uint32_t));
+		bindShadedShaderProgram();
 	}
 
 	// 创建截面相关渲染资源
 	{
-		sectionVertexNum = 0;
-		sectionIndexNum = 0;
 		const int kMaxSectionVertexNum = 5000;
 		sectionVertices.resize(kMaxSectionVertexNum);
-		sectionIndices.resize(sectionVertices.count() * 3);
+		sectionIndices.resize(sectionVertices.count() * 10);
 
 		sectionVAO.create();
 		sectionVAO.bind();
@@ -257,7 +167,7 @@ void OpenGLWindow::initializeGL()
 		sectionVBO.create();
 		sectionVBO.bind();
 		sectionVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
-		sectionVBO.allocate(sectionVertices.constData(), sectionVertices.count() * sizeof(SectionVertex));
+		sectionVBO.allocate(sectionVertices.constData(), sectionVertices.count() * sizeof(NodeVertex));
 
 		// create the index buffer object
 		sectionIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
@@ -265,13 +175,23 @@ void OpenGLWindow::initializeGL()
 		sectionIBO.bind();
 		sectionIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
 		sectionIBO.allocate(sectionIndices.constData(), sectionIndices.count() * sizeof(uint32_t));
+		bindShadedShaderProgram();
+		
 
-		// connect the inputs to the shader program
-		sectionShaderProgram->bind();
-		sectionShaderProgram->enableAttributeArray(0);
-		sectionShaderProgram->enableAttributeArray(1);
-		sectionShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(SectionVertex, position), 3, sizeof(SectionVertex));
-		sectionShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(SectionVertex, texcoord), 3, sizeof(SectionVertex));
+		// 初始化截面线框资源
+		sectionWireframeIndices.resize(sectionVertices.count() * 5);
+
+		sectionWireframeVAO.create();
+		sectionWireframeVAO.bind();
+		sectionVBO.bind();
+
+		// create the index buffer object
+		sectionWireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		sectionWireframeIBO.create();
+		sectionWireframeIBO.bind();
+		sectionWireframeIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+		sectionWireframeIBO.allocate(sectionWireframeIndices.constData(), sectionWireframeIndices.count() * sizeof(uint32_t));
+		bindWireframeShaderProgram();
 	}
 
 	// 创建obj模型相关渲染资源
@@ -291,15 +211,6 @@ void OpenGLWindow::initializeGL()
 		objIBO.bind();
 		objIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 		objIBO.allocate(objIndices.constData(), objIndices.count() * sizeof(uint32_t));
-
-		// connect the inputs to the shader program
-		shadedShaderProgram->bind();
-		shadedShaderProgram->enableAttributeArray(0);
-		shadedShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
-
-		//simpleShaderProgram->bind();
-		//simpleShaderProgram->enableAttributeArray(0);
-		//simpleShaderProgram->setAttributeBuffer(0, GL_FLOAT, 0, 3, sizeof(QVector3D));
 	}
 
 	// 初始化计时器
@@ -328,10 +239,10 @@ void OpenGLWindow::paintGL()
 
 	// 每帧更新切割面，切割模型
 	float globalTime = globalElapsedTimer.elapsed() * 0.001f;
-	plane.origin = QVector3D(0.0f, 0.0f, 400.0f * qSin(globalTime));
-	//plane.origin = QVector3D(0.0f, 0.0f, -45.25f);
+	plane.origin = QVector3D(0.0f, 0.0f, 600.0f * qSin(globalTime));
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
+	clipZones();
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -343,9 +254,16 @@ void OpenGLWindow::paintGL()
 
 	wireframeShaderProgram->bind();
 	wireframeShaderProgram->setUniformValue("mvp", mvp);
+	wireframeShaderProgram->setUniformValue("plane.normal", plane.normal);
+	wireframeShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	wireframeVAO.bind();
+	wireframeShaderProgram->setUniformValue("skipClip", false);
 	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	sectionWireframeVAO.bind();
+	wireframeShaderProgram->setUniformValue("skipClip", true);
+	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	shadedShaderProgram->bind();
 	shadedShaderProgram->setUniformValue("mvp", mvp);
@@ -354,31 +272,18 @@ void OpenGLWindow::paintGL()
 	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	zoneVAO.bind();
+	shadedShaderProgram->setUniformValue("skipClip", false);
 	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	//facetVAO.bind();
 	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	//simpleShaderProgram->bind();
-	//simpleShaderProgram->setUniformValue("mvp", mvp);
-	//simpleShaderProgram->setUniformValue("plane.normal", plane.normal);
-	//simpleShaderProgram->setUniformValue("plane.dist", plane.dist);
-
 	//objVAO.bind();
 	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	//sectionShaderProgram->bind();
-	//sectionShaderProgram->setUniformValue("mvp", mvp);
-
-	//sectionVAO.bind();
-	//clipMeshExterior();
-	//glDrawElements(GL_TRIANGLES, sectionIndexNum, GL_UNSIGNED_INT, nullptr);
-
-	//nodeShaderProgram->bind();
-	//nodeShaderProgram->setUniformValue("mvp", mvp);
-
-	//nodeVAO.bind();
-	//glDrawArrays(GL_POINTS, 0, nodeVertices.count());
+	sectionVAO.bind();
+	shadedShaderProgram->setUniformValue("skipClip", true);
+	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -459,43 +364,88 @@ bool OpenGLWindow::loadDatabase()
 		if (type == 1)
 		{
 			zone.type = Brick;
+			zone.edgeNum = 12;
 		}
 		else if (type == 2)
 		{
 			zone.type = Tetrahedron;
+			zone.edgeNum = 6;
 		}
 
-		zone.num = query.value(2).toInt();
-		for (int i = 0; i < zone.num; ++i)
+		zone.vertexNum = query.value(2).toInt();
+		for (int i = 0; i < zone.vertexNum; ++i)
 		{
-			zone.indices[i] = query.value(i + 3).toInt() - 1;
+			zone.vertices[i] = query.value(i + 3).toInt() - 1;
+			zone.bound.combine(nodeVertices[zone.vertices[i]].position);
 		}
+		zone.bound.centriod = (zone.bound.min + zone.bound.max) * 0.5f;
+
+		if (zone.vertexNum == 8)
+		{
+			zoneIndices.append({ zone.vertices[0], zone.vertices[3], zone.vertices[1],
+				zone.vertices[1], zone.vertices[3], zone.vertices[2],
+				zone.vertices[4], zone.vertices[5], zone.vertices[7],
+				zone.vertices[5], zone.vertices[6], zone.vertices[7],
+				zone.vertices[0], zone.vertices[1], zone.vertices[4],
+				zone.vertices[1], zone.vertices[5], zone.vertices[4],
+				zone.vertices[1], zone.vertices[2], zone.vertices[5],
+				zone.vertices[2], zone.vertices[6], zone.vertices[5],
+				zone.vertices[2], zone.vertices[3], zone.vertices[7],
+				zone.vertices[2], zone.vertices[7], zone.vertices[6],
+				zone.vertices[3], zone.vertices[0], zone.vertices[4],
+				zone.vertices[3], zone.vertices[4], zone.vertices[7]
+				});
+
+			zone.edges[0] = zone.vertices[0]; 
+			zone.edges[1] = zone.vertices[1]; 
+			zone.edges[2] = zone.vertices[1]; 
+			zone.edges[3] = zone.vertices[2];
+			zone.edges[4] = zone.vertices[2]; 
+			zone.edges[5] = zone.vertices[3]; 
+			zone.edges[6] = zone.vertices[3]; 
+			zone.edges[7] = zone.vertices[0];
+
+			zone.edges[8] = zone.vertices[1];
+			zone.edges[9] = zone.vertices[5];
+			zone.edges[10] = zone.vertices[2];
+			zone.edges[11] = zone.vertices[6];
+			zone.edges[12] = zone.vertices[3];
+			zone.edges[13] = zone.vertices[7];
+			zone.edges[14] = zone.vertices[0];
+			zone.edges[15] = zone.vertices[4];
+
+			zone.edges[16] = zone.vertices[5];
+			zone.edges[17] = zone.vertices[6];
+			zone.edges[18] = zone.vertices[6];
+			zone.edges[19] = zone.vertices[7];
+			zone.edges[20] = zone.vertices[7];
+			zone.edges[21] = zone.vertices[4];
+			zone.edges[22] = zone.vertices[4];
+			zone.edges[23] = zone.vertices[5];
+		}
+		else if (zone.vertexNum == 4)
+		{
+			zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[3],
+				zone.vertices[0], zone.vertices[3], zone.vertices[2],
+				zone.vertices[1], zone.vertices[2], zone.vertices[3],
+				zone.vertices[0], zone.vertices[2], zone.vertices[1],
+				});
+
+			zone.edges[0] = zone.vertices[0];
+			zone.edges[1] = zone.vertices[1];
+			zone.edges[2] = zone.vertices[0];
+			zone.edges[3] = zone.vertices[2];
+			zone.edges[4] = zone.vertices[1];
+			zone.edges[5] = zone.vertices[2];
+			zone.edges[6] = zone.vertices[0];
+			zone.edges[7] = zone.vertices[3];
+			zone.edges[8] = zone.vertices[1];
+			zone.edges[9] = zone.vertices[3];
+			zone.edges[10] = zone.vertices[2];
+			zone.edges[11] = zone.vertices[3];
+		}
+
 		zones.append(zone);
-
-		if (zone.num == 8)
-		{
-			zoneIndices.append({ zone.indices[0], zone.indices[3], zone.indices[1],
-				zone.indices[1], zone.indices[3], zone.indices[2],
-				zone.indices[4], zone.indices[5], zone.indices[7],
-				zone.indices[5], zone.indices[6], zone.indices[7],
-				zone.indices[0], zone.indices[1], zone.indices[4],
-				zone.indices[1], zone.indices[5], zone.indices[4],
-				zone.indices[1], zone.indices[2], zone.indices[5],
-				zone.indices[2], zone.indices[6], zone.indices[5],
-				zone.indices[2], zone.indices[3], zone.indices[7],
-				zone.indices[2], zone.indices[7], zone.indices[6],
-				zone.indices[3], zone.indices[0], zone.indices[4],
-				zone.indices[3], zone.indices[4], zone.indices[7]
-				});
-		}
-		else if (zone.num == 4)
-		{
-			zoneIndices.append({ zone.indices[0], zone.indices[1], zone.indices[3],
-				zone.indices[0], zone.indices[3], zone.indices[2],
-				zone.indices[1], zone.indices[2], zone.indices[3],
-				zone.indices[0], zone.indices[2], zone.indices[1],
-				});
-		}
 	}
 
 	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
@@ -659,102 +609,103 @@ bool OpenGLWindow::loadDatabase()
 
 void OpenGLWindow::preprocess()
 {
-	//// 加载测试obj模型
-	//profileTimer.start();
-	//GeoUtil::loadObjMesh("E:/Data/monkey.obj", objMesh);
-	//qint64 loadTime = profileTimer.restart();
+	profileTimer.start();
 
-	//// 构架bvh树
-	//bvhRoot = GeoUtil::buildBVHTree(objMesh);
-	//qint64 buildTime = profileTimer.restart();
+	// 构建bvh树
+	bvhRoot = GeoUtil::buildBVHTree(zones);
+	qint64 buildTime = profileTimer.restart();
 
-	//objIndices.resize(objMesh.faces.count() * 3);
-	//for (int i = 0; i < objMesh.faces.count(); ++i)
-	//{
-	//	for (int j = 0; j < 3; ++j)
-	//	{
-	//		objIndices[i * 3 + j] = objMesh.faces[i].vertices[j];
-	//	}
-	//}
-	//qint64 copyTime = profileTimer.restart();
-
-	//plane.origin = QVector3D(0.0f, 0.0f, 100.0f);
-	//plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
-	//plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	//QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane, bvhRoot);
-	//qint64 clipTime = profileTimer.restart();
-
-	//qDebug() << loadTime << buildTime << copyTime << clipTime;
-
-	//GeoUtil::cleanMesh(mesh);
-	//GeoUtil::fixWindingOrder(mesh);
-	//bool result = GeoUtil::validateMesh(mesh);
-	//Q_ASSERT_X(result, "preprocess", "mesh is not valid!");
-
-	//facetIndices.resize(mesh.faces.count() * 3);
-	//for (int i = 0; i < mesh.faces.count(); ++i)
-	//{
-	//	for (int j = 0; j < 3; ++j)
-	//	{
-	//		facetIndices[i * 3 + j] = mesh.faces[i].vertices[j];
-	//	}
-	//}
+	qint64 clipTime = profileTimer.restart();
 }
 
-void OpenGLWindow::clipMeshExterior()
+void OpenGLWindow::clipZones()
 {
-	sectionVertexNum = 0;
-	sectionIndexNum = 0;
-
-	qint64 t0, t1, t2;
 	profileTimer.start();
-	QVector<ClipLine> clipLines = GeoUtil::clipMesh(objMesh, plane, bvhRoot);
-	t0 = profileTimer.restart();
-
-	for (const ClipLine& clipLine : clipLines)
-	{
-		SectionVertex center;
-		center.position = QVector3D(0.0f, 0.0f, 0.0f);
-		const auto& vertices = clipLine.vertices;
-		uint32_t vertexNum = (uint32_t)vertices.count();
-		for (size_t i = 0; i < vertexNum; ++i)
-		{
-			center.position += vertices[i];
-		}
-		center.position /= vertexNum;
-		uint32_t baseIndex = sectionVertexNum;
-		sectionVertices[sectionVertexNum++] = center;
-
-		for (uint32_t i = 0; i < vertexNum; ++i)
-		{
-			QVector3D current_position = vertices[i];
-			QVector3D next_position = vertices[(i + 1) % vertexNum];
-
-			sectionVertices[sectionVertexNum++] = SectionVertex{ current_position };
-			sectionIndices[sectionIndexNum++] = baseIndex;
-			sectionIndices[sectionIndexNum++] = baseIndex + i + 1;
-			sectionIndices[sectionIndexNum++] = baseIndex + (i + 1) % vertexNum + 1;
-		}
-	}
-
-	t1 = profileTimer.restart();
-
+	GeoUtil::clipZones(zones, plane, bvhRoot, nodeVertices, sectionVertices, sectionIndices, sectionWireframeIndices);
+	
 	// 更新缓存数据
+	sectionVAO.bind();
 	sectionVBO.bind();
-	int count = sectionVertexNum * sizeof(SectionVertex);
+	int count = sectionVertices.count() * sizeof(NodeVertex);
 	void* dst = sectionVBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
 	memcpy(dst, (void*)sectionVertices.constData(), count);
 	sectionVBO.unmap();
 
 	sectionIBO.bind();
-	count = sectionIndexNum * sizeof(uint32_t);
+	count = sectionIndices.count() * sizeof(uint32_t);
 	dst = sectionIBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
 	memcpy(dst, (void*)sectionIndices.constData(), count);
 	sectionIBO.unmap();
 
-	t2 = profileTimer.restart();
+	sectionWireframeVAO.bind();
+	sectionWireframeIBO.bind();
+	count = sectionWireframeIndices.count() * sizeof(uint32_t);
+	dst = sectionWireframeIBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
+	memcpy(dst, (void*)sectionWireframeIndices.constData(), count);
+	sectionWireframeIBO.unmap();
 
-	//qDebug() << t0 << t1 << t2;
+	qint64 clipTime = profileTimer.restart();
+	//qDebug() << clipTime;
+}
+
+void OpenGLWindow::bindWireframeShaderProgram()
+{
+	wireframeShaderProgram->bind();
+	wireframeShaderProgram->enableAttributeArray(0);
+	wireframeShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
+}
+
+void OpenGLWindow::bindShadedShaderProgram()
+{
+	shadedShaderProgram->bind();
+	shadedShaderProgram->enableAttributeArray(0);
+	shadedShaderProgram->enableAttributeArray(1);
+	shadedShaderProgram->enableAttributeArray(2);
+	shadedShaderProgram->enableAttributeArray(3);
+	shadedShaderProgram->enableAttributeArray(4);
+	shadedShaderProgram->enableAttributeArray(5);
+	shadedShaderProgram->enableAttributeArray(6);
+	shadedShaderProgram->enableAttributeArray(7);
+	shadedShaderProgram->enableAttributeArray(8);
+	shadedShaderProgram->enableAttributeArray(9);
+
+	shadedShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(NodeVertex, totalDeformation), 1, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(2, GL_FLOAT, offsetof(NodeVertex, deformation), 3, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(3, GL_FLOAT, offsetof(NodeVertex, normalElasticStrain), 3, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(4, GL_FLOAT, offsetof(NodeVertex, shearElasticStrain), 3, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(5, GL_FLOAT, offsetof(NodeVertex, maximumPrincipalStress), 1, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(6, GL_FLOAT, offsetof(NodeVertex, middlePrincipalStress), 1, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(7, GL_FLOAT, offsetof(NodeVertex, minimumPrincipalStress), 1, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(8, GL_FLOAT, offsetof(NodeVertex, normalStress), 3, sizeof(NodeVertex));
+	shadedShaderProgram->setAttributeBuffer(9, GL_FLOAT, offsetof(NodeVertex, shearStress), 3, sizeof(NodeVertex));
+
+	shadedShaderProgram->setUniformValue("valueRange.minTotalDeformation", valueRange.minTotalDeformation);
+	shadedShaderProgram->setUniformValue("valueRange.maxTotalDeformation", valueRange.maxTotalDeformation);
+
+	shadedShaderProgram->setUniformValue("valueRange.minDeformation", valueRange.minDeformation);
+	shadedShaderProgram->setUniformValue("valueRange.maxDeformation", valueRange.maxDeformation);
+
+	shadedShaderProgram->setUniformValue("valueRange.minNormalElasticStrain", valueRange.minNormalElasticStrain);
+	shadedShaderProgram->setUniformValue("valueRange.maxNormalElasticStrain", valueRange.maxNormalElasticStrain);
+
+	shadedShaderProgram->setUniformValue("valueRange.minShearElasticStrain", valueRange.minShearElasticStrain);
+	shadedShaderProgram->setUniformValue("valueRange.maxShearElasticStrain", valueRange.maxShearElasticStrain);
+
+	shadedShaderProgram->setUniformValue("valueRange.minMaximumPrincipalStress", valueRange.minMaximumPrincipalStress);
+	shadedShaderProgram->setUniformValue("valueRange.maxMaximumPrincipalStress", valueRange.maxMaximumPrincipalStress);
+
+	shadedShaderProgram->setUniformValue("valueRange.minMiddlePrincipalStress", valueRange.minMiddlePrincipalStress);
+	shadedShaderProgram->setUniformValue("valueRange.maxMiddlePrincipalStress", valueRange.maxMiddlePrincipalStress);
+
+	shadedShaderProgram->setUniformValue("valueRange.minMinimumPrincipalStress", valueRange.minMinimumPrincipalStress);
+	shadedShaderProgram->setUniformValue("maxMinimumPrincipalStress", valueRange.maxMinimumPrincipalStress);
+
+	shadedShaderProgram->setUniformValue("valueRange.minNormalStress", valueRange.minNormalStress);
+	shadedShaderProgram->setUniformValue("valueRange.maxNormalStress", valueRange.maxNormalStress);
+
+	shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
+	shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
 }
 
 QVector3D OpenGLWindow::toVec3(const std::array<double, 3>& arr3)
