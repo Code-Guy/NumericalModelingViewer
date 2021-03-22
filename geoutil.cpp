@@ -201,6 +201,7 @@ void GeoUtil::cleanMesh(Mesh& mesh)
 	int validFaceIndex = 0;
 	int invalidFaceIndex = 0;
 
+	std::array<int, 3> invalidFaceCounter = { 0, 0, 0 };
 	for (int i = 0; i < mesh.faces.count(); ++i)
 	{
 		Face& face = mesh.faces[i];
@@ -208,6 +209,20 @@ void GeoUtil::cleanMesh(Mesh& mesh)
 		if (!existed)
 		{
 			uniqueFaces.insert(face);
+		}
+
+		// 统计各种类型非法面的个数
+		if (existed)
+		{
+			invalidFaceCounter[0]++;
+		}
+		if (!face.visited)
+		{
+			invalidFaceCounter[1]++;
+		}
+		if (!isManifordFace(mesh, face))
+		{
+			invalidFaceCounter[2]++;
 		}
 
 		if (existed || !face.visited || !isManifordFace(mesh, face))
@@ -245,7 +260,6 @@ void GeoUtil::fixWindingOrder(Mesh& mesh)
 
 	QQueue<uint32_t> queue;
 	queue.enqueue(0);
-	flipWindingOrder(mesh.faces[0]);
 	mesh.faces[0].visited = true;
 	
 	while (!queue.isEmpty())

@@ -74,11 +74,11 @@ bool isOnPositiveSideOfPlane(vec3 point, float epsilon = 0.01f)
 
 void main()
 {
-	if (!skipClip && !isOnPositiveSideOfPlane(VPosition, 1.0f))
-	{
-		discard;
-		return;
-	}
+	// if (!skipClip && !isOnPositiveSideOfPlane(VPosition, 1.0f))
+	// {
+	// 	discard;
+	// 	return;
+	// }
 
 	FColor = vec4(calcHeatmapColor(VTotalDeformation, valueRange.minTotalDeformation, valueRange.maxTotalDeformation), 1.0);
 	//FColor = vec4(1.0, 1.0, 1.0, 1.0);

@@ -35,6 +35,8 @@ protected:
 
 private:
     bool loadDatabase();
+    void loadDataFiles();
+    void addFacet(Facet& facet);
 	void preprocess();
     void clipZones();
 

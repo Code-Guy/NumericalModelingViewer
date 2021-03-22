@@ -14,6 +14,7 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 
 	// 加载数据
 	loadDatabase();
+	//loadDataFiles();
 	preprocess();
 
 	// 初始化摄像机
@@ -242,7 +243,7 @@ void OpenGLWindow::paintGL()
 	plane.origin = QVector3D(0.0f, 0.0f, 600.0f * qSin(globalTime));
 	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	clipZones();
+	//clipZones();
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -263,7 +264,7 @@ void OpenGLWindow::paintGL()
 
 	sectionWireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	shadedShaderProgram->bind();
 	shadedShaderProgram->setUniformValue("mvp", mvp);
@@ -273,17 +274,17 @@ void OpenGLWindow::paintGL()
 
 	zoneVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", false);
-	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	//facetVAO.bind();
-	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
-
-	//objVAO.bind();
-	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
+	facetVAO.bind();
+	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	//objVAO.bind();
+	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
 }
 
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
@@ -476,60 +477,28 @@ bool OpenGLWindow::loadDatabase()
 	//}
 
 	// 查询模型所有外表面对应的节点索引信息
-	//query.exec("SELECT * FROM EXTERIOR");
-	//record = query.record();
-	//while (query.next())
-	//{
-	//	Facet facet;
-	//	facet.num = query.value(3).toInt();
-	//	QSet<uint32_t> indexSet;
-	//	for (int i = 0; i < facet.num; ++i)
-	//	{
-	//		facet.indices[i] = query.value(i + 4).toInt() - 1;
-	//		indexSet.insert(facet.indices[i]);
-	//	}
+	query.exec("SELECT * FROM EXTERIOR");
+	record = query.record();
+	while (query.next())
+	{
+		Facet facet;
+		facet.num = query.value(3).toInt();
+		if (facet.num == 4)
+		{
+			facet.type = Q4;
+		}
+		else if (facet.num == 3)
+		{
+			facet.type = T3;
+		}
 
-	//	if (indexSet.count() == 2)
-	//	{
-	//		continue;
-	//	}
+		for (int i = 0; i < facet.num; ++i)
+		{
+			facet.indices[i] = query.value(i + 4).toInt() - 1;
+		}
 
-	//	if (indexSet.count() < facet.num && indexSet.count() == 3)
-	//	{
-	//		facet.num = 3;
-	//	}
-	//	facets.append(facet);
-
-	//	QVector<uint32_t> indices;
-	//	if (facet.num == 3)
-	//	{
-	//		indices.append({ facet.indices[0], facet.indices[1], facet.indices[2] });
-	//		wireframeIndices.append({ facet.indices[0], facet.indices[1],
-	//			facet.indices[0], facet.indices[2],
-	//			facet.indices[1], facet.indices[2] });
-	//	}
-	//	else if (facet.num == 4)
-	//	{
-	//		indices.append({
-	//			facet.indices[0], facet.indices[1], facet.indices[2],
-	//			facet.indices[0], facet.indices[2], facet.indices[3]
-	//			});
-	//		wireframeIndices.append({ facet.indices[0], facet.indices[1],
-	//			facet.indices[1], facet.indices[2],
-	//			facet.indices[2], facet.indices[3],
-	//			facet.indices[3], facet.indices[0] });
-	//	}
-
-	//	facetIndices.append(indices);
-	//	for (int i = 0; i < indices.count(); i += 3)
-	//	{
-	//		uint32_t v0 = indices[i];
-	//		uint32_t v1 = indices[i + 1];
-	//		uint32_t v2 = indices[i + 2];
-
-	//		GeoUtil::addFace(mesh, v0, v1, v2);
-	//	}
-	//}
+		addFacet(facet);
+	}
 
 	// 查询每个节点对应的计算结果值
 	query.exec("SELECT * FROM RESULTS");
@@ -607,15 +576,297 @@ bool OpenGLWindow::loadDatabase()
 	return true;
 }
 
+void OpenGLWindow::loadDataFiles()
+{
+    // 加载模型网格数据
+	QFile modelFile("asset/data/model001.f3grid");
+	if (modelFile.open(QIODevice::ReadOnly))
+	{
+		QTextStream in(&modelFile);
+		while (!in.atEnd())
+		{
+            QString header;
+            in >> header;
+            if (header == "G")
+            {
+				int index;
+				NodeVertex nodeVertex;
+				in >> index >> nodeVertex.position[0] >> nodeVertex.position[1] >> nodeVertex.position[2];
+
+				mesh.vertices.append(nodeVertex.position);
+				nodeVertices.append(nodeVertex);
+            }
+            else if (header == "Z")
+            {
+                Zone zone;
+                QString type;
+                int Index;
+                in >> type >> Index;
+
+				if (type == "W6")
+				{
+					zone.type = Wedge;
+					zone.vertexNum = 6;
+					zone.edgeNum = 12;
+				}
+                else if (type == "B8")
+                {
+                    zone.type = Brick;
+                    zone.vertexNum = 8;
+					zone.edgeNum = 9;
+                }
+                else
+                {
+                    qDebug() << "Unknown zone type: " << type;
+                    return;
+                }
+
+                for (int i = 0; i < zone.vertexNum; ++i)
+                {
+                    in >> zone.vertices[i];
+                    zone.vertices[i] -= 1;
+					zone.bound.combine(nodeVertices[zone.vertices[i]].position);
+                }
+				zone.bound.centriod = (zone.bound.min + zone.bound.max) * 0.5f;
+
+				if (zone.vertexNum == 8)
+				{
+					zoneIndices.append({ zone.vertices[0], zone.vertices[3], zone.vertices[1],
+						zone.vertices[1], zone.vertices[3], zone.vertices[2],
+						zone.vertices[4], zone.vertices[5], zone.vertices[7],
+						zone.vertices[5], zone.vertices[6], zone.vertices[7],
+						zone.vertices[0], zone.vertices[1], zone.vertices[4],
+						zone.vertices[1], zone.vertices[5], zone.vertices[4],
+						zone.vertices[1], zone.vertices[2], zone.vertices[5],
+						zone.vertices[2], zone.vertices[6], zone.vertices[5],
+						zone.vertices[2], zone.vertices[3], zone.vertices[7],
+						zone.vertices[2], zone.vertices[7], zone.vertices[6],
+						zone.vertices[3], zone.vertices[0], zone.vertices[4],
+						zone.vertices[3], zone.vertices[4], zone.vertices[7]
+						});
+
+					zone.edges[0] = zone.vertices[0];
+					zone.edges[1] = zone.vertices[1];
+					zone.edges[2] = zone.vertices[1];
+					zone.edges[3] = zone.vertices[2];
+					zone.edges[4] = zone.vertices[2];
+					zone.edges[5] = zone.vertices[3];
+					zone.edges[6] = zone.vertices[3];
+					zone.edges[7] = zone.vertices[0];
+
+					zone.edges[8] = zone.vertices[1];
+					zone.edges[9] = zone.vertices[5];
+					zone.edges[10] = zone.vertices[2];
+					zone.edges[11] = zone.vertices[6];
+					zone.edges[12] = zone.vertices[3];
+					zone.edges[13] = zone.vertices[7];
+					zone.edges[14] = zone.vertices[0];
+					zone.edges[15] = zone.vertices[4];
+
+					zone.edges[16] = zone.vertices[5];
+					zone.edges[17] = zone.vertices[6];
+					zone.edges[18] = zone.vertices[6];
+					zone.edges[19] = zone.vertices[7];
+					zone.edges[20] = zone.vertices[7];
+					zone.edges[21] = zone.vertices[4];
+					zone.edges[22] = zone.vertices[4];
+					zone.edges[23] = zone.vertices[5];
+				}
+				else if (zone.vertexNum == 6)
+				{
+					zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[2],
+						zone.vertices[3], zone.vertices[4], zone.vertices[5],
+						zone.vertices[0], zone.vertices[2], zone.vertices[3],
+						zone.vertices[2], zone.vertices[5], zone.vertices[3],
+						zone.vertices[0], zone.vertices[3], zone.vertices[1],
+						zone.vertices[1], zone.vertices[3], zone.vertices[4],
+						zone.vertices[1], zone.vertices[5], zone.vertices[2],
+						zone.vertices[1], zone.vertices[4], zone.vertices[5]
+						});
+
+					zone.edges[0] = zone.vertices[0];
+					zone.edges[1] = zone.vertices[1];
+					zone.edges[2] = zone.vertices[0];
+					zone.edges[3] = zone.vertices[2];
+					zone.edges[4] = zone.vertices[1];
+					zone.edges[5] = zone.vertices[2];
+					zone.edges[6] = zone.vertices[3];
+					zone.edges[7] = zone.vertices[5];
+					zone.edges[8] = zone.vertices[3];
+					zone.edges[9] = zone.vertices[4];
+					zone.edges[10] = zone.vertices[4];
+					zone.edges[11] = zone.vertices[5];
+					zone.edges[12] = zone.vertices[0];
+					zone.edges[13] = zone.vertices[3];
+					zone.edges[14] = zone.vertices[2];
+					zone.edges[15] = zone.vertices[5];
+					zone.edges[16] = zone.vertices[1];
+					zone.edges[17] = zone.vertices[4];
+				}
+
+				zones.append(zone);
+            }
+            else if (header == "F")
+            {
+				Facet facet;
+				QString type;
+				int Index;
+				in >> type >> Index;
+
+				if (type == "Q4")
+				{
+					facet.type = Q4;
+					facet.num = 4;
+				}
+				else if (type == "T3")
+				{
+					facet.type = T3;
+					facet.num = 3;
+				}
+				else
+				{
+					qDebug() << "Unknown zone type: " << type;
+					return;
+				}
+
+				for (int i = 0; i < facet.num; ++i)
+				{
+					in >> facet.indices[i];
+					facet.indices[i] -= 1;
+				}
+
+				addFacet(facet);
+            }
+			in.readLine();
+		}
+		modelFile.close();
+	}
+
+	// 加载三向（XYZ）位移数据数据
+	QFile gridFile("asset/data/gridpoint_result.txt");
+    if (gridFile.open(QIODevice::ReadOnly))
+    {
+        QTextStream in(&gridFile);
+        in.readLine();
+        while (!in.atEnd())
+        {
+            int index;
+            in >> index;
+            index -= 1;
+
+            in >> nodeVertices[index].totalDeformation >>
+				nodeVertices[index].deformation[0] >>
+				nodeVertices[index].deformation[1];
+
+			valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, nodeVertices[index].totalDeformation);
+			valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, nodeVertices[index].totalDeformation);
+            in.readLine();
+        }
+
+        gridFile.close();
+    }
+
+	// 加载应力数据
+	QFile sigForceFile("asset/data/zone_result.txt");
+	if (sigForceFile.open(QIODevice::ReadOnly))
+	{
+		QTextStream in(&sigForceFile);
+		in.readLine();
+		while (!in.atEnd())
+		{
+			int index;
+			in >> index;
+			index -= 1;
+
+			in >> nodeVertices[index].normalStress[0] >>
+				nodeVertices[index].normalStress[1] >>
+				nodeVertices[index].normalStress[2] >>
+				nodeVertices[index].shearStress[0] >>
+				nodeVertices[index].shearStress[1] >>
+				nodeVertices[index].shearStress[2] >>
+				nodeVertices[index].maximumPrincipalStress;
+			in.readLine();
+		}
+
+        sigForceFile.close();
+	}
+}
+
+void OpenGLWindow::addFacet(Facet& facet)
+{
+	QSet<uint32_t> indexSet;
+	for (int i = 0; i < facet.num; ++i)
+	{
+		indexSet.insert(facet.indices[i]);
+	}
+
+	if (indexSet.count() == 2)
+	{
+		return;
+	}
+
+	if (indexSet.count() < facet.num && indexSet.count() == 3)
+	{
+		facet.num = 3;
+	}
+	facets.append(facet);
+
+	QVector<uint32_t> indices;
+	if (facet.num == 3)
+	{
+		indices.append({ facet.indices[0], facet.indices[1], facet.indices[2] });
+		wireframeIndices.append({ facet.indices[0], facet.indices[1],
+			facet.indices[0], facet.indices[2],
+			facet.indices[1], facet.indices[2] });
+	}
+	else if (facet.num == 4)
+	{
+		indices.append({
+			facet.indices[0], facet.indices[1], facet.indices[2],
+			facet.indices[0], facet.indices[2], facet.indices[3]
+			});
+		wireframeIndices.append({ facet.indices[0], facet.indices[1],
+			facet.indices[1], facet.indices[2],
+			facet.indices[2], facet.indices[3],
+			facet.indices[3], facet.indices[0] });
+	}
+
+	facetIndices.append(indices);
+	for (int i = 0; i < indices.count(); i += 3)
+	{
+		uint32_t v0 = indices[i];
+		uint32_t v1 = indices[i + 1];
+		uint32_t v2 = indices[i + 2];
+
+		GeoUtil::addFace(mesh, v0, v1, v2);
+	}
+}
+
 void OpenGLWindow::preprocess()
 {
 	profileTimer.start();
+
+	// 清洗数据
+	GeoUtil::cleanMesh(mesh);
+	GeoUtil::fixWindingOrder(mesh);
+	bool result = GeoUtil::validateMesh(mesh);
+	Q_ASSERT_X(result, "preprocess", "mesh is not valid!");
+
+	facetIndices.resize(mesh.faces.count() * 3);
+	for (int i = 0; i < mesh.faces.count(); ++i)
+	{
+		for (int j = 0; j < 3; ++j)
+		{
+			facetIndices[i * 3 + j] = mesh.faces[i].vertices[j];
+		}
+	}
+	qint64 cleanTime = profileTimer.restart();
 
 	// 构建bvh树
 	bvhRoot = GeoUtil::buildBVHTree(zones);
 	qint64 buildTime = profileTimer.restart();
 
-	qint64 clipTime = profileTimer.restart();
+	qDebug() << "clean time:" << cleanTime << "build time:" << buildTime;
 }
 
 void OpenGLWindow::clipZones()
