@@ -13,12 +13,13 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
 	// 加载数据
-	loadDatabase();
-	//loadDataFiles();
+	//loadDatabase();
+	loadDataFiles();
 	preprocess();
 
 	// 初始化摄像机
 	camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
+	//camera = new Camera(QVector3D(387.4f, 57.1f, 267.4f), 226.7f, -26.0f, -31.5f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
 	camera->setFovy(60.0f);
 }
@@ -240,10 +241,10 @@ void OpenGLWindow::paintGL()
 
 	// 每帧更新切割面，切割模型
 	float globalTime = globalElapsedTimer.elapsed() * 0.001f;
-	plane.origin = QVector3D(0.0f, 0.0f, 600.0f * qSin(globalTime));
-	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
+	plane.origin = QVector3D(0.0f, 0.0f, 300.0f * qSin(globalTime));
+	plane.normal = QVector3D(0.0f, 0.0f, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	//clipZones();
+	clipZones();
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -264,7 +265,7 @@ void OpenGLWindow::paintGL()
 
 	sectionWireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	shadedShaderProgram->bind();
 	shadedShaderProgram->setUniformValue("mvp", mvp);
@@ -274,14 +275,14 @@ void OpenGLWindow::paintGL()
 
 	zoneVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", false);
-	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	facetVAO.bind();
-	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	//objVAO.bind();
 	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
@@ -593,6 +594,7 @@ void OpenGLWindow::loadDataFiles()
 				NodeVertex nodeVertex;
 				in >> index >> nodeVertex.position[0] >> nodeVertex.position[1] >> nodeVertex.position[2];
 
+				nodeVertex.position *= 8.0f;
 				mesh.vertices.append(nodeVertex.position);
 				nodeVertices.append(nodeVertex);
             }
@@ -607,13 +609,13 @@ void OpenGLWindow::loadDataFiles()
 				{
 					zone.type = Wedge;
 					zone.vertexNum = 6;
-					zone.edgeNum = 12;
+					zone.edgeNum = 9;
 				}
                 else if (type == "B8")
                 {
                     zone.type = Brick;
                     zone.vertexNum = 8;
-					zone.edgeNum = 9;
+					zone.edgeNum = 12;
                 }
                 else
                 {
@@ -631,77 +633,77 @@ void OpenGLWindow::loadDataFiles()
 
 				if (zone.vertexNum == 8)
 				{
-					zoneIndices.append({ zone.vertices[0], zone.vertices[3], zone.vertices[1],
-						zone.vertices[1], zone.vertices[3], zone.vertices[2],
+					zoneIndices.append({ zone.vertices[0], zone.vertices[2], zone.vertices[1],
+						zone.vertices[1], zone.vertices[2], zone.vertices[4],
+						zone.vertices[0], zone.vertices[3], zone.vertices[2],
+						zone.vertices[2], zone.vertices[3], zone.vertices[5],
+						zone.vertices[2], zone.vertices[5], zone.vertices[4],
 						zone.vertices[4], zone.vertices[5], zone.vertices[7],
-						zone.vertices[5], zone.vertices[6], zone.vertices[7],
-						zone.vertices[0], zone.vertices[1], zone.vertices[4],
-						zone.vertices[1], zone.vertices[5], zone.vertices[4],
-						zone.vertices[1], zone.vertices[2], zone.vertices[5],
-						zone.vertices[2], zone.vertices[6], zone.vertices[5],
-						zone.vertices[2], zone.vertices[3], zone.vertices[7],
-						zone.vertices[2], zone.vertices[7], zone.vertices[6],
-						zone.vertices[3], zone.vertices[0], zone.vertices[4],
-						zone.vertices[3], zone.vertices[4], zone.vertices[7]
+						zone.vertices[1], zone.vertices[4], zone.vertices[6],
+						zone.vertices[4], zone.vertices[7], zone.vertices[6],
+						zone.vertices[0], zone.vertices[1], zone.vertices[3],
+						zone.vertices[1], zone.vertices[6], zone.vertices[3],
+						zone.vertices[3], zone.vertices[6], zone.vertices[5],
+						zone.vertices[6], zone.vertices[7], zone.vertices[5]
 						});
 
 					zone.edges[0] = zone.vertices[0];
 					zone.edges[1] = zone.vertices[1];
 					zone.edges[2] = zone.vertices[1];
-					zone.edges[3] = zone.vertices[2];
-					zone.edges[4] = zone.vertices[2];
-					zone.edges[5] = zone.vertices[3];
-					zone.edges[6] = zone.vertices[3];
+					zone.edges[3] = zone.vertices[4];
+					zone.edges[4] = zone.vertices[4];
+					zone.edges[5] = zone.vertices[2];
+					zone.edges[6] = zone.vertices[2];
 					zone.edges[7] = zone.vertices[0];
 
-					zone.edges[8] = zone.vertices[1];
-					zone.edges[9] = zone.vertices[5];
-					zone.edges[10] = zone.vertices[2];
-					zone.edges[11] = zone.vertices[6];
-					zone.edges[12] = zone.vertices[3];
-					zone.edges[13] = zone.vertices[7];
-					zone.edges[14] = zone.vertices[0];
-					zone.edges[15] = zone.vertices[4];
+					zone.edges[8] = zone.vertices[3];
+					zone.edges[9] = zone.vertices[6];
+					zone.edges[10] = zone.vertices[6];
+					zone.edges[11] = zone.vertices[7];
+					zone.edges[12] = zone.vertices[7];
+					zone.edges[13] = zone.vertices[5];
+					zone.edges[14] = zone.vertices[5];
+					zone.edges[15] = zone.vertices[3];
 
-					zone.edges[16] = zone.vertices[5];
-					zone.edges[17] = zone.vertices[6];
-					zone.edges[18] = zone.vertices[6];
-					zone.edges[19] = zone.vertices[7];
-					zone.edges[20] = zone.vertices[7];
-					zone.edges[21] = zone.vertices[4];
-					zone.edges[22] = zone.vertices[4];
+					zone.edges[16] = zone.vertices[0];
+					zone.edges[17] = zone.vertices[3];
+					zone.edges[18] = zone.vertices[1];
+					zone.edges[19] = zone.vertices[6];
+					zone.edges[20] = zone.vertices[4];
+					zone.edges[21] = zone.vertices[7];
+					zone.edges[22] = zone.vertices[2];
 					zone.edges[23] = zone.vertices[5];
 				}
 				else if (zone.vertexNum == 6)
 				{
-					zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[2],
-						zone.vertices[3], zone.vertices[4], zone.vertices[5],
-						zone.vertices[0], zone.vertices[2], zone.vertices[3],
-						zone.vertices[2], zone.vertices[5], zone.vertices[3],
-						zone.vertices[0], zone.vertices[3], zone.vertices[1],
-						zone.vertices[1], zone.vertices[3], zone.vertices[4],
-						zone.vertices[1], zone.vertices[5], zone.vertices[2],
-						zone.vertices[1], zone.vertices[4], zone.vertices[5]
+					zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[3],
+						zone.vertices[2], zone.vertices[5], zone.vertices[4],
+						zone.vertices[0], zone.vertices[2], zone.vertices[1],
+						zone.vertices[1], zone.vertices[2], zone.vertices[4],
+						zone.vertices[1], zone.vertices[5], zone.vertices[3],
+						zone.vertices[1], zone.vertices[4], zone.vertices[5],
+						zone.vertices[0], zone.vertices[3], zone.vertices[2],
+						zone.vertices[2], zone.vertices[3], zone.vertices[5]
 						});
 
 					zone.edges[0] = zone.vertices[0];
 					zone.edges[1] = zone.vertices[1];
-					zone.edges[2] = zone.vertices[0];
-					zone.edges[3] = zone.vertices[2];
-					zone.edges[4] = zone.vertices[1];
-					zone.edges[5] = zone.vertices[2];
-					zone.edges[6] = zone.vertices[3];
-					zone.edges[7] = zone.vertices[5];
-					zone.edges[8] = zone.vertices[3];
-					zone.edges[9] = zone.vertices[4];
-					zone.edges[10] = zone.vertices[4];
-					zone.edges[11] = zone.vertices[5];
-					zone.edges[12] = zone.vertices[0];
-					zone.edges[13] = zone.vertices[3];
-					zone.edges[14] = zone.vertices[2];
+					zone.edges[2] = zone.vertices[1];
+					zone.edges[3] = zone.vertices[3];
+					zone.edges[4] = zone.vertices[3];
+					zone.edges[5] = zone.vertices[0];
+					zone.edges[6] = zone.vertices[2];
+					zone.edges[7] = zone.vertices[4];
+					zone.edges[8] = zone.vertices[4];
+					zone.edges[9] = zone.vertices[5];
+					zone.edges[10] = zone.vertices[5];
+					zone.edges[11] = zone.vertices[2];
+					zone.edges[12] = zone.vertices[1];
+					zone.edges[13] = zone.vertices[4];
+					zone.edges[14] = zone.vertices[3];
 					zone.edges[15] = zone.vertices[5];
-					zone.edges[16] = zone.vertices[1];
-					zone.edges[17] = zone.vertices[4];
+					zone.edges[16] = zone.vertices[0];
+					zone.edges[17] = zone.vertices[2];
 				}
 
 				zones.append(zone);
