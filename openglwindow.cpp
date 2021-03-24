@@ -13,8 +13,8 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
 	// 加载数据
-	//loadDatabase();
-	loadDataFiles();
+	loadDatabase();
+	//loadDataFiles();
 	preprocess();
 
 	// 初始化摄像机

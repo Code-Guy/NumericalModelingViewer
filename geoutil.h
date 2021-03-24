@@ -228,20 +228,17 @@ public:
 	static void fixWindingOrder(Mesh& mesh);
 	static void clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* root, QVector<NodeVertex>& nodeVertices, QVector<NodeVertex>& sectionVertices, QVector<uint32_t>& sectionIndices, QVector<uint32_t>& sectionWireframeIndices);
 	static bool validateMesh(Mesh& mesh);
-	static BVHTreeNode* buildBVHTree(const Mesh& mesh);
 	static BVHTreeNode* buildBVHTree(const QVector<Zone>& zones);
+	static void interpUniformGrids(BVHTreeNode* root, UniformGrids& uniformGrids);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);
 	static void flipWindingOrder(Face& face);
-	static void clipFace(const Mesh& mesh, const Face& face, const Plane& plane, QMap<Edge, QVector3D>& hits);
 	static bool clipZone(const Zone& zone, const Plane& plane, QVector<NodeVertex>& nodeVertices, QMap<Edge, uint32_t>& intersectionIndexMap, QVector<NodeVertex>& sectionVertices, QVector<uint32_t>& sectionIndices, QSet<Edge>& sectionWireframes);
-	static bool clipEdge(const Mesh& mesh, const Edge& edge, const Plane& plane, QVector3D& intersection);
 	static bool isManifordFace(const Mesh& mesh, const Face& face, bool strict = true);
 	static void traverseMesh(Mesh& mesh);
 	static void resetMeshVisited(Mesh& mesh);
 	static void resetZoneVisited(QVector<Zone>& zones);
-	static BVHTreeNode* buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end);
 	static BVHTreeNode* buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>& zoneIndices, int begin, int end);
 	static void resetBVHTree(BVHTreeNode* node);
 	static void clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* node, QVector<NodeVertex>& nodeVertices, QMap<Edge, uint32_t>& intersectionIndexMap, QVector<NodeVertex>& sectionVertices, QVector<uint32_t>& sectionIndices, QSet<Edge>& sectionWireframes);

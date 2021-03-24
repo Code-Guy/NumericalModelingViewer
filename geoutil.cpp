@@ -479,16 +479,6 @@ bool GeoUtil::validateMesh(Mesh& mesh)
 	return true;
 }
 
-BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh)
-{
-	QVector<uint32_t> faces;
-	for (int i = 0; i < mesh.faces.count(); ++i)
-	{
-		faces.append(i);
-	}
-	return buildBVHTree(mesh, faces, 0, mesh.faces.count());
-}
-
 BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones)
 {
 	QVector<uint32_t> zoneIndices;
@@ -497,57 +487,6 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones)
 		zoneIndices.append(i);
 	}
 	return buildBVHTree(zones, zoneIndices, 0, zoneIndices.count());
-}
-
-BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end)
-{
-	BVHTreeNode* node = new BVHTreeNode;
-	int num = end - begin;
-
-	if (num <= 3)
-	{
-		for (int i = begin; i < end; ++i)
-		{
-			uint32_t f = faces[i];
-			const Bound& bound = mesh.faces[f].bound;
-			node->bound.combine(bound);
-			node->bound.cache();
-		}
-
-		for (int i = begin; i < end; ++i)
-		{
-			node->faces.append(faces[i]);
-		}
-		node->children[0] = node->children[1] = nullptr;
-		node->isLeaf = true;
-	}
-	else
-	{
-		Bound centriodBound;
-		for (int i = begin; i < end; ++i)
-		{
-			uint32_t f = faces[i];
-			const Bound& bound = mesh.faces[f].bound;
-			centriodBound.combine(bound.centriod);
-		}
-
-		int dim = centriodBound.maxDim();
-		int mid = (begin + end) * 0.5f;
-		std::nth_element(&faces[begin], &faces[mid], &faces[end - 1] + 1,
-			[&mesh, dim](uint32_t a, uint32_t b)
-		{
-			return mesh.faces[a].bound.centriod[dim] < mesh.faces[b].bound.centriod[dim];
-		});
-
-		node->children[0] = buildBVHTree(mesh, faces, begin, mid);
-		node->children[1] = buildBVHTree(mesh, faces, mid, end);
-		node->bound.combine(node->children[0]->bound);
-		node->bound.combine(node->children[1]->bound);
-		node->bound.cache();
-		node->isLeaf = false;
-	}
-
-	return node;
 }
 
 BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>& zoneIndices, int begin, int end)
@@ -611,6 +550,11 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>
 	}
 
 	return node;
+}
+
+void GeoUtil::interpUniformGrids(BVHTreeNode* root, UniformGrids& uniformGrids)
+{
+
 }
 
 void GeoUtil::resetBVHTree(BVHTreeNode* node)
