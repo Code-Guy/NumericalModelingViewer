@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <fstream>
 
+// Bound成员函数实现
 void Bound::scale(float s)
 {
 	QVector3D offset = (max - min) * (s - 1.0f);
@@ -68,9 +69,11 @@ bool Bound::intersect(const Plane& plane)
 	return false;
 }
 
-bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
+bool Bound::contain(const QVector3D& point) const
 {
-	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
+	return point[0] >= min[0] && point[0] <= max[0] &&
+		point[1] >= min[1] && point[1] <= max[1] &&
+		point[2] >= min[2] && point[2] <= max[2];
 }
 
 void Bound::cache()
@@ -90,24 +93,26 @@ void Bound::reset()
 	intersectFlag = -1;
 }
 
-QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
+bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
 {
-	return QVector3D(
-		qMin(lhs[0], rhs[0]),
-		qMin(lhs[1], rhs[1]),
-		qMin(lhs[2], rhs[2])
-	);
+	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
 }
 
-QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
+bool Bound::calcNormalCoord(const QVector3D& point, float& xt, float& yt, float& zt) const
 {
-	return QVector3D(
-		qMax(lhs[0], rhs[0]),
-		qMax(lhs[1], rhs[1]),
-		qMax(lhs[2], rhs[2])
-	);
+	if (!contain(point))
+	{
+		return false;
+	}
+
+	xt = (point[0] - min[0]) / (max[0] - min[0]);
+	yt = (point[1] - min[1]) / (max[1] - min[1]);
+	zt = (point[2] - min[2]) / (max[2] - min[2]);
+
+	return true;
 }
 
+// GeoUtil成员函数实现
 void GeoUtil::loadObjMesh(const char* fileName, Mesh& mesh)
 {
 	QFile inputFile(fileName);
@@ -596,7 +601,43 @@ void GeoUtil::clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* n
 	}
 }
 
-bool GeoUtil::isVec3NearlyEqual(const QVector3D& lhs, const QVector3D& rhs, float epsilon /*= 0.001f*/)
+bool GeoUtil::interpUniformGrid(const QVector<Zone>& zones, QVector<NodeVertex>& nodeVertices, BVHTreeNode* node, const QVector3D& point, float& value)
 {
-	return lhs.distanceToPoint(rhs) < epsilon;
+	if (node->isLeaf)
+	{
+		for (uint32_t z : node->zones)
+		{
+			const Zone& zone = zones[z];
+			float xt, yt, zt;
+			if (zone.bound.calcNormalCoord(point, xt, yt, zt))
+			{
+				if (zone.type == Brick)
+				{
+
+				}
+				else if (zone.type == Wedge)
+				{
+
+				}
+				else if (zone.type == Tetrahedron)
+				{
+
+				}
+			}
+		}
+		return true;
+	}
+	else
+	{
+		if (node->children[0]->bound.contain(point) && interpUniformGrid(zones, nodeVertices, node->children[0], point, value))
+		{
+			return true;
+		}
+		if (node->children[1]->bound.contain(point) && interpUniformGrid(zones, nodeVertices, node->children[1], point, value))
+		{
+			return true;
+		}
+
+		return false;
+	}
 }
