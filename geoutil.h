@@ -69,5 +69,5 @@ private:
 	static BVHTreeNode* buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>& zoneIndices, int begin, int end);
 	static void resetBVHTree(BVHTreeNode* node);
 	static void clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* node, QVector<NodeVertex>& nodeVertices, QMap<Edge, uint32_t>& intersectionIndexMap, QVector<NodeVertex>& sectionVertices, QVector<uint32_t>& sectionIndices, QSet<Edge>& sectionWireframes);
-	static bool interpUniformGrid(const QVector<Zone>& zones, QVector<NodeVertex>& nodeVertices, BVHTreeNode* node, const QVector3D& point, float& value);
+	static bool interpUniformGrid(const QVector<Zone>& zones, const QVector<NodeVertex>& nodeVertices, BVHTreeNode* node, const QVector3D& point, float& value);
 };

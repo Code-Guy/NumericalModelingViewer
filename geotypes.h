@@ -39,7 +39,6 @@ struct Bound
 	void reset();
 
 	bool calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon = 0.001f);
-	bool calcNormalCoord(const QVector3D& point, float& xt, float& yt, float& zt) const;
 };
 
 struct Edge
@@ -136,6 +135,8 @@ struct Zone
 
 	Bound bound;
 	bool visited = false;
+
+	bool interp(const QVector<NodeVertex>& nodeVertices, const QVector3D& point, float& value) const;
 };
 
 struct Facet

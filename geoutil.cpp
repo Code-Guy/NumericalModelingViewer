@@ -98,17 +98,46 @@ bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float
 	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
 }
 
-bool Bound::calcNormalCoord(const QVector3D& point, float& xt, float& yt, float& zt) const
+// Zone类成员函数实现
+bool Zone::interp(const QVector<NodeVertex>& nodeVertices, const QVector3D& point, float& value) const
 {
-	if (!contain(point))
+	if (!bound.contain(point))
 	{
 		return false;
 	}
 
-	xt = (point[0] - min[0]) / (max[0] - min[0]);
-	yt = (point[1] - min[1]) / (max[1] - min[1]);
-	zt = (point[2] - min[2]) / (max[2] - min[2]);
+	float xt = (point[0] - bound.min[0]) / (bound.max[0] - bound.min[0]);
+	float yt = (point[1] - bound.min[1]) / (bound.max[1] - bound.min[1]);
+	float zt = (point[2] - bound.min[2]) / (bound.max[2] - bound.min[2]);
 
+	static const int orders[8] = { 2, 4, 0, 1, 5, 7, 3, 6 };
+	float values[8];
+	for (int i = 0; i < vertexNum; ++i)
+	{
+		values[i] = nodeVertices[vertices[orders[i]]].totalDeformation;
+	}
+	if (type == Wedge)
+	{
+		values[6] = values[3];
+		values[7] = values[5];
+	}
+	else if (type == Pyramid)
+	{
+		values[5] = values[6] = values[7] = values[3];
+	}
+	else if (type == DegeneratedBrick)
+	{
+		values[7] = values[6];
+	}
+	else if (type == Tetrahedron)
+	{
+		values[4] = values[2];
+		values[5] = values[6] = values[7] = values[3];
+	}
+
+	value = qTriLerp(values[0], values[1], values[2], values[3],
+		values[4], values[5], values[6], values[7],
+		xt, yt, zt);
 	return true;
 }
 
@@ -601,31 +630,19 @@ void GeoUtil::clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* n
 	}
 }
 
-bool GeoUtil::interpUniformGrid(const QVector<Zone>& zones, QVector<NodeVertex>& nodeVertices, BVHTreeNode* node, const QVector3D& point, float& value)
+bool GeoUtil::interpUniformGrid(const QVector<Zone>& zones, const QVector<NodeVertex>& nodeVertices, BVHTreeNode* node, const QVector3D& point, float& value)
 {
 	if (node->isLeaf)
 	{
 		for (uint32_t z : node->zones)
 		{
 			const Zone& zone = zones[z];
-			float xt, yt, zt;
-			if (zone.bound.calcNormalCoord(point, xt, yt, zt))
+			if (zone.interp(nodeVertices, point, value))
 			{
-				if (zone.type == Brick)
-				{
-
-				}
-				else if (zone.type == Wedge)
-				{
-
-				}
-				else if (zone.type == Tetrahedron)
-				{
-
-				}
+				return true;
 			}
 		}
-		return true;
+		return false;
 	}
 	else
 	{

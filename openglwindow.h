@@ -37,6 +37,8 @@ private:
     bool loadDatabase();
     void loadDataFiles();
     void addFacet(Facet& facet);
+    void addZone(Zone& zone);
+
 	void preprocess();
     void clipZones();
 
