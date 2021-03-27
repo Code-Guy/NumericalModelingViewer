@@ -28,6 +28,7 @@ struct Bound
 	QVector3D corners[8];
 	int intersectFlag;
 
+	QVector3D size();
 	void scale(float s);
 	Bound scaled(float s);
 	void combine(const QVector3D& position);
@@ -136,7 +137,10 @@ struct Zone
 	Bound bound;
 	bool visited = false;
 
-	bool interp(const QVector<NodeVertex>& nodeVertices, const QVector3D& point, float& value) const;
+	float values[8];
+	Bound valueBound;
+	void cache(const QVector<NodeVertex>& nodeVertices);
+	bool interp(const QVector3D& point, float& value) const;
 };
 
 struct Facet
@@ -207,4 +211,47 @@ inline bool operator==(const Face& lhs, const Face& rhs)
 inline uint qHash(const Face& face, uint seed = 0)
 {
 	return qHash(face.vertices[0] * face.vertices[1] * face.vertices[2]);
+}
+
+// 基础向量操作函数
+inline QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
+{
+	return QVector3D(
+		qMin(lhs[0], rhs[0]),
+		qMin(lhs[1], rhs[1]),
+		qMin(lhs[2], rhs[2])
+	);
+}
+
+inline QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
+{
+	return QVector3D(
+		qMax(lhs[0], rhs[0]),
+		qMax(lhs[1], rhs[1]),
+		qMax(lhs[2], rhs[2])
+	);
+}
+
+template <typename T>
+T qLerp(T a, T b, T t)
+{
+	return a * (1 - t) + b * t;
+}
+
+template <typename T>
+T qBiLerp(T xa, T xb, T ya, T yb, T xt, T yt)
+{
+	float m = qLerp(xa, xb, xt);
+	float n = qLerp(ya, yb, xt);
+	return qLerp(m, n, yt);
+}
+
+template <typename T>
+T qTriLerp(T zxa0, T zxb0, T zya0, T zyb0,
+	T zxa1, T zxb1, T zya1, T zyb1,
+	T xt, T yt, T zt)
+{
+	float m = qBiLerp(zxa0, zxb0, zya0, zyb0, xt, yt);
+	float n = qBiLerp(zxa1, zxb1, zya1, zyb1, xt, yt);
+	return qLerp(m, n, zt);
 }

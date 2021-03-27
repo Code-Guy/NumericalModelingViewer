@@ -7,140 +7,6 @@
 #include <algorithm>
 #include <fstream>
 
-// Bound成员函数实现
-void Bound::scale(float s)
-{
-	QVector3D offset = (max - min) * (s - 1.0f);
-	min -= offset;
-	max += offset;
-}
-
-Bound Bound::scaled(float s)
-{
-	QVector3D offset = (max - min) * (s - 1.0f);
-	return Bound{ min - offset, max + offset };
-}
-
-void Bound::combine(const QVector3D& position)
-{
-	min = qMinVec3(min, position);
-	max = qMaxVec3(max, position);
-}
-
-void Bound::combine(const Bound& bound)
-{
-	min = qMinVec3(min, bound.min);
-	max = qMaxVec3(max, bound.max);
-}
-
-int Bound::maxDim()
-{
-	QVector3D size = max - min;
-	if (size[0] > size[1] && size[0] > size[2])
-	{
-		return 0;
-	}
-	if (size[1] > size[0] && size[1] > size[2])
-	{
-		return 1;
-	}
-	return 2;
-}
-
-bool Bound::intersect(const Plane& plane)
-{
-	if (intersectFlag != -1)
-	{
-		return intersectFlag;
-	}
-
-	bool first = calcPointPlaneSide(corners[0], plane);
-	for (int i = 1; i < 8; i++)
-	{
-		bool other = calcPointPlaneSide(corners[i], plane);
-		if (other != first)
-		{
-			intersectFlag = 1;
-			return true;
-		}
-	}
-
-	intersectFlag = 0;
-	return false;
-}
-
-bool Bound::contain(const QVector3D& point) const
-{
-	return point[0] >= min[0] && point[0] <= max[0] &&
-		point[1] >= min[1] && point[1] <= max[1] &&
-		point[2] >= min[2] && point[2] <= max[2];
-}
-
-void Bound::cache()
-{
-	corners[0] = QVector3D(min[0], min[1], min[2]);
-	corners[1] = QVector3D(min[0], min[1], max[2]);
-	corners[2] = QVector3D(min[0], max[1], min[2]);
-	corners[3] = QVector3D(min[0], max[1], max[2]);
-	corners[4] = QVector3D(max[0], min[1], min[2]);
-	corners[5] = QVector3D(max[0], min[1], max[2]);
-	corners[6] = QVector3D(max[0], max[1], min[2]);
-	corners[7] = QVector3D(max[0], max[1], max[2]);
-}
-
-void Bound::reset()
-{
-	intersectFlag = -1;
-}
-
-bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
-{
-	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
-}
-
-// Zone类成员函数实现
-bool Zone::interp(const QVector<NodeVertex>& nodeVertices, const QVector3D& point, float& value) const
-{
-	if (!bound.contain(point))
-	{
-		return false;
-	}
-
-	float xt = (point[0] - bound.min[0]) / (bound.max[0] - bound.min[0]);
-	float yt = (point[1] - bound.min[1]) / (bound.max[1] - bound.min[1]);
-	float zt = (point[2] - bound.min[2]) / (bound.max[2] - bound.min[2]);
-
-	static const int orders[8] = { 2, 4, 0, 1, 5, 7, 3, 6 };
-	float values[8];
-	for (int i = 0; i < vertexNum; ++i)
-	{
-		values[i] = nodeVertices[vertices[orders[i]]].totalDeformation;
-	}
-	if (type == Wedge)
-	{
-		values[6] = values[3];
-		values[7] = values[5];
-	}
-	else if (type == Pyramid)
-	{
-		values[5] = values[6] = values[7] = values[3];
-	}
-	else if (type == DegeneratedBrick)
-	{
-		values[7] = values[6];
-	}
-	else if (type == Tetrahedron)
-	{
-		values[4] = values[2];
-		values[5] = values[6] = values[7] = values[3];
-	}
-
-	value = qTriLerp(values[0], values[1], values[2], values[3],
-		values[4], values[5], values[6], values[7],
-		xt, yt, zt);
-	return true;
-}
-
 // GeoUtil成员函数实现
 void GeoUtil::loadObjMesh(const char* fileName, Mesh& mesh)
 {
@@ -586,9 +452,33 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>
 	return node;
 }
 
-void GeoUtil::interpUniformGrids(BVHTreeNode* root, UniformGrids& uniformGrids)
+bool GeoUtil::interpZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point, float& value)
 {
+	if (node->isLeaf)
+	{
+		for (uint32_t z : node->zones)
+		{
+			const Zone& zone = zones[z];
+			if (zone.interp(point, value))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	else
+	{
+		if (node->children[0]->bound.contain(point) && interpZones(zones, node->children[0], point, value))
+		{
+			return true;
+		}
+		if (node->children[1]->bound.contain(point) && interpZones(zones, node->children[1], point, value))
+		{
+			return true;
+		}
 
+		return false;
+	}
 }
 
 void GeoUtil::resetBVHTree(BVHTreeNode* node)
@@ -627,34 +517,5 @@ void GeoUtil::clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* n
 		{
 			clipZones(zones, plane, node->children[1], nodeVertices, intersectionIndexMap, sectionVertices, sectionIndices, sectionWireframes);
 		}
-	}
-}
-
-bool GeoUtil::interpUniformGrid(const QVector<Zone>& zones, const QVector<NodeVertex>& nodeVertices, BVHTreeNode* node, const QVector3D& point, float& value)
-{
-	if (node->isLeaf)
-	{
-		for (uint32_t z : node->zones)
-		{
-			const Zone& zone = zones[z];
-			if (zone.interp(nodeVertices, point, value))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-	else
-	{
-		if (node->children[0]->bound.contain(point) && interpUniformGrid(zones, nodeVertices, node->children[0], point, value))
-		{
-			return true;
-		}
-		if (node->children[1]->bound.contain(point) && interpUniformGrid(zones, nodeVertices, node->children[1], point, value))
-		{
-			return true;
-		}
-
-		return false;
 	}
 }

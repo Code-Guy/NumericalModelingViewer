@@ -6,6 +6,8 @@
 #include <QSqlQuery>
 #include <QSqlRecord>
 #include <QMessageBox>
+#include <MeshReconstruction.h>
+#include <IO.h>
 
 OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 {
@@ -245,7 +247,7 @@ void OpenGLWindow::paintGL()
 	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
 	plane.normal = QVector3D(qSin(globalTime), qSin(globalTime), -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	clipZones();
+	//clipZones();
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -261,7 +263,7 @@ void OpenGLWindow::paintGL()
 	wireframeShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	wireframeVAO.bind();
-	wireframeShaderProgram->setUniformValue("skipClip", false);
+	wireframeShaderProgram->setUniformValue("skipClip", true);
 	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionWireframeVAO.bind();
@@ -275,7 +277,7 @@ void OpenGLWindow::paintGL()
 	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	zoneVAO.bind();
-	shadedShaderProgram->setUniformValue("skipClip", false);
+	shadedShaderProgram->setUniformValue("skipClip", true);
 	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	facetVAO.bind();
@@ -344,6 +346,65 @@ bool OpenGLWindow::loadDatabase()
 		mesh.vertices.append(nodeVertex.position);
 
 		nodeVertices.append(nodeVertex);
+	}
+
+	// 查询每个节点对应的计算结果值
+	query.exec("SELECT * FROM RESULTS");
+	record = query.record();
+	while (query.next())
+	{
+		int index = query.value(0).toInt() - 1;
+		nodeVertices[index].totalDeformation = query.value(1).toFloat();
+		valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, nodeVertices[index].totalDeformation);
+		valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, nodeVertices[index].totalDeformation);
+
+		int i = 2;
+		for (int j = 0; j < 3; ++j)
+		{
+			nodeVertices[index].deformation[j] = query.value(i++).toFloat();
+		}
+		valueRange.minDeformation = qMinVec3(valueRange.minDeformation, nodeVertices[index].deformation);
+		valueRange.maxDeformation = qMaxVec3(valueRange.maxDeformation, nodeVertices[index].deformation);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			nodeVertices[index].normalElasticStrain[j] = query.value(i++).toFloat();
+		}
+		valueRange.minNormalElasticStrain = qMinVec3(valueRange.minNormalElasticStrain, nodeVertices[index].normalElasticStrain);
+		valueRange.maxNormalElasticStrain = qMaxVec3(valueRange.maxNormalElasticStrain, nodeVertices[index].normalElasticStrain);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			nodeVertices[index].shearElasticStrain[j] = query.value(i++).toFloat();
+		}
+		valueRange.minShearElasticStrain = qMinVec3(valueRange.minShearElasticStrain, nodeVertices[index].shearElasticStrain);
+		valueRange.maxShearElasticStrain = qMaxVec3(valueRange.maxShearElasticStrain, nodeVertices[index].shearElasticStrain);
+
+		nodeVertices[index].maximumPrincipalStress = query.value(i++).toFloat();
+		valueRange.minMaximumPrincipalStress = qMin(valueRange.minMaximumPrincipalStress, nodeVertices[index].maximumPrincipalStress);
+		valueRange.maxMaximumPrincipalStress = qMax(valueRange.maxMaximumPrincipalStress, nodeVertices[index].maximumPrincipalStress);
+
+		nodeVertices[index].middlePrincipalStress = query.value(i++).toFloat();
+		valueRange.minMiddlePrincipalStress = qMin(valueRange.minMiddlePrincipalStress, nodeVertices[index].middlePrincipalStress);
+		valueRange.maxMiddlePrincipalStress = qMax(valueRange.maxMiddlePrincipalStress, nodeVertices[index].middlePrincipalStress);
+
+		nodeVertices[index].minimumPrincipalStress = query.value(i++).toFloat();
+		valueRange.minMinimumPrincipalStress = qMin(valueRange.minMinimumPrincipalStress, nodeVertices[index].minimumPrincipalStress);
+		valueRange.maxMinimumPrincipalStress = qMax(valueRange.maxMinimumPrincipalStress, nodeVertices[index].minimumPrincipalStress);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			nodeVertices[index].normalStress[j] = query.value(i++).toFloat();
+		}
+		valueRange.minNormalStress = qMinVec3(valueRange.minNormalStress, nodeVertices[index].normalStress);
+		valueRange.maxNormalStress = qMaxVec3(valueRange.maxNormalStress, nodeVertices[index].normalStress);
+
+		for (int j = 0; j < 3; ++j)
+		{
+			nodeVertices[index].shearStress[j] = query.value(i++).toFloat();
+		}
+		valueRange.minShearStress = qMinVec3(valueRange.minShearStress, nodeVertices[index].shearStress);
+		valueRange.maxShearStress = qMaxVec3(valueRange.maxShearStress, nodeVertices[index].shearStress);
 	}
 
 	// 查询网格单元类型信息
@@ -433,65 +494,6 @@ bool OpenGLWindow::loadDatabase()
 		}
 
 		addFacet(facet);
-	}
-
-	// 查询每个节点对应的计算结果值
-	query.exec("SELECT * FROM RESULTS");
-	record = query.record();
-	while (query.next())
-	{
-		int index = query.value(0).toInt() - 1;
-		nodeVertices[index].totalDeformation = query.value(1).toFloat();
-		valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, nodeVertices[index].totalDeformation);
-		valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, nodeVertices[index].totalDeformation);
-
-		int i = 2;
-		for (int j = 0; j < 3; ++j)
-		{
-			nodeVertices[index].deformation[j] = query.value(i++).toFloat();
-		}
-		valueRange.minDeformation = qMinVec3(valueRange.minDeformation, nodeVertices[index].deformation);
-		valueRange.maxDeformation = qMaxVec3(valueRange.maxDeformation, nodeVertices[index].deformation);
-
-		for (int j = 0; j < 3; ++j)
-		{
-			nodeVertices[index].normalElasticStrain[j] = query.value(i++).toFloat();
-		}
-		valueRange.minNormalElasticStrain = qMinVec3(valueRange.minNormalElasticStrain, nodeVertices[index].normalElasticStrain);
-		valueRange.maxNormalElasticStrain = qMaxVec3(valueRange.maxNormalElasticStrain, nodeVertices[index].normalElasticStrain);
-
-		for (int j = 0; j < 3; ++j)
-		{
-			nodeVertices[index].shearElasticStrain[j] = query.value(i++).toFloat();
-		}
-		valueRange.minShearElasticStrain = qMinVec3(valueRange.minShearElasticStrain, nodeVertices[index].shearElasticStrain);
-		valueRange.maxShearElasticStrain = qMaxVec3(valueRange.maxShearElasticStrain, nodeVertices[index].shearElasticStrain);
-
-		nodeVertices[index].maximumPrincipalStress = query.value(i++).toFloat();
-		valueRange.minMaximumPrincipalStress = qMin(valueRange.minMaximumPrincipalStress, nodeVertices[index].maximumPrincipalStress);
-		valueRange.maxMaximumPrincipalStress = qMax(valueRange.maxMaximumPrincipalStress, nodeVertices[index].maximumPrincipalStress);
-
-		nodeVertices[index].middlePrincipalStress = query.value(i++).toFloat();
-		valueRange.minMiddlePrincipalStress = qMin(valueRange.minMiddlePrincipalStress, nodeVertices[index].middlePrincipalStress);
-		valueRange.maxMiddlePrincipalStress = qMax(valueRange.maxMiddlePrincipalStress, nodeVertices[index].middlePrincipalStress);
-
-		nodeVertices[index].minimumPrincipalStress = query.value(i++).toFloat();
-		valueRange.minMinimumPrincipalStress = qMin(valueRange.minMinimumPrincipalStress, nodeVertices[index].minimumPrincipalStress);
-		valueRange.maxMinimumPrincipalStress = qMax(valueRange.maxMinimumPrincipalStress, nodeVertices[index].minimumPrincipalStress);
-
-		for (int j = 0; j < 3; ++j)
-		{
-			nodeVertices[index].normalStress[j] = query.value(i++).toFloat();
-		}
-		valueRange.minNormalStress = qMinVec3(valueRange.minNormalStress, nodeVertices[index].normalStress);
-		valueRange.maxNormalStress = qMaxVec3(valueRange.maxNormalStress, nodeVertices[index].normalStress);
-
-		for (int j = 0; j < 3; ++j)
-		{
-			nodeVertices[index].shearStress[j] = query.value(i++).toFloat();
-		}
-		valueRange.minShearStress = qMinVec3(valueRange.minShearStress, nodeVertices[index].shearStress);
-		valueRange.maxShearStress = qMaxVec3(valueRange.maxShearStress, nodeVertices[index].shearStress);
 	}
 
 	// 查询计算结果类型、名称
@@ -649,6 +651,12 @@ void OpenGLWindow::loadDataFiles()
 
         sigForceFile.close();
 	}
+
+	// zone的缓存计算
+	for (Zone& zone : zones)
+	{
+		zone.cache(nodeVertices);
+	}
 }
 
 void OpenGLWindow::addFacet(Facet& facet)
@@ -805,6 +813,7 @@ void OpenGLWindow::addZone(Zone& zone)
 		zone.edges[11] = zone.vertices[3];
 	}
 
+	zone.cache(nodeVertices);
 	zones.append(zone);
 }
 
@@ -833,6 +842,26 @@ void OpenGLWindow::preprocess()
 	qint64 buildTime = profileTimer.restart();
 
 	qDebug() << "clean time:" << cleanTime << "build time:" << buildTime;
+
+	float value;
+	GeoUtil::interpZones(zones, bvhRoot, QVector3D(0.0f, 0.0f, 0.0f), value);
+
+	// 测试等值面绘制
+	float r = 300.0f;
+	auto sphereSdf = [&r](MeshReconstruction::Vec3 const& pos)
+	{
+		return pos.Norm() - r;
+	};
+
+	MeshReconstruction::Rect3 domain;
+	QVector3D min = bvhRoot->bound.min;
+	QVector3D size = bvhRoot->bound.size();
+	domain.min = { min[0], min[1], min[2] };
+	domain.size = { size[0], size[1], size[2] };
+
+	MeshReconstruction::Vec3 cubeSize = domain.size * 0.05;
+	auto mesh = MarchCube(sphereSdf, domain, cubeSize);
+	MeshReconstruction::WriteObjFile(mesh, "sphere.obj");
 }
 
 void OpenGLWindow::clipZones()
