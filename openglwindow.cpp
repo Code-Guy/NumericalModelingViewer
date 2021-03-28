@@ -847,10 +847,12 @@ void OpenGLWindow::preprocess()
 	GeoUtil::interpZones(zones, bvhRoot, QVector3D(0.0f, 0.0f, 0.0f), value);
 
 	// 测试等值面绘制
-	float r = 300.0f;
-	auto sphereSdf = [&r](MeshReconstruction::Vec3 const& pos)
+	float equalValue = 0.025f;
+	auto sdf = [this, equalValue](MeshReconstruction::Vec3 const& pos)
 	{
-		return pos.Norm() - r;
+		float value;
+		GeoUtil::interpZones(zones, bvhRoot, QVector3D(pos.x, pos.y, pos.z), value);
+		return value - equalValue;
 	};
 
 	MeshReconstruction::Rect3 domain;
@@ -859,9 +861,9 @@ void OpenGLWindow::preprocess()
 	domain.min = { min[0], min[1], min[2] };
 	domain.size = { size[0], size[1], size[2] };
 
-	MeshReconstruction::Vec3 cubeSize = domain.size * 0.05;
-	auto mesh = MarchCube(sphereSdf, domain, cubeSize);
-	MeshReconstruction::WriteObjFile(mesh, "sphere.obj");
+	MeshReconstruction::Vec3 cubeSize = domain.size * 0.01;
+	auto mesh = MarchCube(sdf, domain, cubeSize);
+	MeshReconstruction::WriteObjFile(mesh, "surface.obj");
 }
 
 void OpenGLWindow::clipZones()
