@@ -6,6 +6,8 @@
 #include <QSqlQuery>
 #include <QSqlRecord>
 #include <QMessageBox>
+#include <MeshReconstruction.h>
+#include <IO.h>
 
 OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 {
@@ -19,6 +21,7 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 
 	// 初始化摄像机
 	camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
+	//camera = new Camera(QVector3D(387.4f, 57.1f, 267.4f), 226.7f, -26.0f, -31.5f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
 	camera->setFovy(60.0f);
 }
@@ -240,8 +243,9 @@ void OpenGLWindow::paintGL()
 
 	// 每帧更新切割面，切割模型
 	float globalTime = globalElapsedTimer.elapsed() * 0.001f;
-	plane.origin = QVector3D(0.0f, 0.0f, 600.0f * qSin(globalTime));
-	plane.normal = QVector3D(-1.0f, -1.0f, -1.0f).normalized();
+	//plane.origin = QVector3D(0.0f, 0.0f, 300.0f * qSin(globalTime));
+	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
+	plane.normal = QVector3D(qSin(globalTime), qSin(globalTime), -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
 	//clipZones();
 
@@ -259,12 +263,12 @@ void OpenGLWindow::paintGL()
 	wireframeShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	wireframeVAO.bind();
-	wireframeShaderProgram->setUniformValue("skipClip", false);
+	wireframeShaderProgram->setUniformValue("skipClip", true);
 	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionWireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	shadedShaderProgram->bind();
 	shadedShaderProgram->setUniformValue("mvp", mvp);
@@ -273,15 +277,15 @@ void OpenGLWindow::paintGL()
 	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
 
 	zoneVAO.bind();
-	shadedShaderProgram->setUniformValue("skipClip", false);
-	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+	shadedShaderProgram->setUniformValue("skipClip", true);
+	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	facetVAO.bind();
-	glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	//objVAO.bind();
 	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
@@ -344,162 +348,6 @@ bool OpenGLWindow::loadDatabase()
 		nodeVertices.append(nodeVertex);
 	}
 
-	// 查询网格单元类型信息
-	query.exec("SELECT * FROM ELETYPE");
-	record = query.record();
-	while (query.next())
-	{
-		int zoneType = query.value(0).toInt();
-		zoneTypes.append(zoneType);
-	}
-
-	// 查询网格单元节点索引
-	query.exec("SELECT * FROM ELEMENTS");
-	record = query.record();
-
-	int index = 0;
-	while (query.next())
-	{
-		Zone zone;
-		int type = query.value(1).toInt();
-		if (type == 1)
-		{
-			zone.type = Brick;
-			zone.edgeNum = 12;
-		}
-		else if (type == 2)
-		{
-			zone.type = Tetrahedron;
-			zone.edgeNum = 6;
-		}
-
-		zone.vertexNum = query.value(2).toInt();
-		for (int i = 0; i < zone.vertexNum; ++i)
-		{
-			zone.vertices[i] = query.value(i + 3).toInt() - 1;
-			zone.bound.combine(nodeVertices[zone.vertices[i]].position);
-		}
-		zone.bound.centriod = (zone.bound.min + zone.bound.max) * 0.5f;
-
-		if (zone.vertexNum == 8)
-		{
-			zoneIndices.append({ zone.vertices[0], zone.vertices[3], zone.vertices[1],
-				zone.vertices[1], zone.vertices[3], zone.vertices[2],
-				zone.vertices[4], zone.vertices[5], zone.vertices[7],
-				zone.vertices[5], zone.vertices[6], zone.vertices[7],
-				zone.vertices[0], zone.vertices[1], zone.vertices[4],
-				zone.vertices[1], zone.vertices[5], zone.vertices[4],
-				zone.vertices[1], zone.vertices[2], zone.vertices[5],
-				zone.vertices[2], zone.vertices[6], zone.vertices[5],
-				zone.vertices[2], zone.vertices[3], zone.vertices[7],
-				zone.vertices[2], zone.vertices[7], zone.vertices[6],
-				zone.vertices[3], zone.vertices[0], zone.vertices[4],
-				zone.vertices[3], zone.vertices[4], zone.vertices[7]
-				});
-
-			zone.edges[0] = zone.vertices[0]; 
-			zone.edges[1] = zone.vertices[1]; 
-			zone.edges[2] = zone.vertices[1]; 
-			zone.edges[3] = zone.vertices[2];
-			zone.edges[4] = zone.vertices[2]; 
-			zone.edges[5] = zone.vertices[3]; 
-			zone.edges[6] = zone.vertices[3]; 
-			zone.edges[7] = zone.vertices[0];
-
-			zone.edges[8] = zone.vertices[1];
-			zone.edges[9] = zone.vertices[5];
-			zone.edges[10] = zone.vertices[2];
-			zone.edges[11] = zone.vertices[6];
-			zone.edges[12] = zone.vertices[3];
-			zone.edges[13] = zone.vertices[7];
-			zone.edges[14] = zone.vertices[0];
-			zone.edges[15] = zone.vertices[4];
-
-			zone.edges[16] = zone.vertices[5];
-			zone.edges[17] = zone.vertices[6];
-			zone.edges[18] = zone.vertices[6];
-			zone.edges[19] = zone.vertices[7];
-			zone.edges[20] = zone.vertices[7];
-			zone.edges[21] = zone.vertices[4];
-			zone.edges[22] = zone.vertices[4];
-			zone.edges[23] = zone.vertices[5];
-		}
-		else if (zone.vertexNum == 4)
-		{
-			zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[3],
-				zone.vertices[0], zone.vertices[3], zone.vertices[2],
-				zone.vertices[1], zone.vertices[2], zone.vertices[3],
-				zone.vertices[0], zone.vertices[2], zone.vertices[1],
-				});
-
-			zone.edges[0] = zone.vertices[0];
-			zone.edges[1] = zone.vertices[1];
-			zone.edges[2] = zone.vertices[0];
-			zone.edges[3] = zone.vertices[2];
-			zone.edges[4] = zone.vertices[1];
-			zone.edges[5] = zone.vertices[2];
-			zone.edges[6] = zone.vertices[0];
-			zone.edges[7] = zone.vertices[3];
-			zone.edges[8] = zone.vertices[1];
-			zone.edges[9] = zone.vertices[3];
-			zone.edges[10] = zone.vertices[2];
-			zone.edges[11] = zone.vertices[3];
-		}
-
-		zones.append(zone);
-	}
-
-	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
-	query.exec("SELECT * FROM ELEMEDGES");
-	record = query.record();
-	while (query.next())
-	{
-		int num = query.value(2).toInt() * 2;
-		for (int i = 0; i < num; ++i)
-		{
-			wireframeIndices.append(query.value(i + 3).toInt() - 1);
-		}
-	}
-
-	// 查询模型所有表面对应的节点索引信息
-	//query.exec("SELECT * FROM FACETS");
-	//record = query.record();
-	//while (query.next())
-	//{
-	//	Face facet;
-	//	facet.num = query.value(2).toInt();
-	//	for (int i = 0; i < facet.num; ++i)
-	//	{
-	//		facet.indices[i] = query.value(i + 3).toInt() - 1;
-	//	}
-
-	//	facets.append(facet);
-	//}
-
-	// 查询模型所有外表面对应的节点索引信息
-	query.exec("SELECT * FROM EXTERIOR");
-	record = query.record();
-	while (query.next())
-	{
-		Facet facet;
-		facet.num = query.value(3).toInt();
-		if (facet.num == 4)
-		{
-			facet.type = Q4;
-		}
-		else if (facet.num == 3)
-		{
-			facet.type = T3;
-		}
-
-		for (int i = 0; i < facet.num; ++i)
-		{
-			facet.indices[i] = query.value(i + 4).toInt() - 1;
-		}
-
-		addFacet(facet);
-	}
-
 	// 查询每个节点对应的计算结果值
 	query.exec("SELECT * FROM RESULTS");
 	record = query.record();
@@ -559,6 +407,95 @@ bool OpenGLWindow::loadDatabase()
 		valueRange.maxShearStress = qMaxVec3(valueRange.maxShearStress, nodeVertices[index].shearStress);
 	}
 
+	// 查询网格单元类型信息
+	query.exec("SELECT * FROM ELETYPE");
+	record = query.record();
+	while (query.next())
+	{
+		int zoneType = query.value(0).toInt();
+		zoneTypes.append(zoneType);
+	}
+
+	// 查询网格单元节点索引
+	query.exec("SELECT * FROM ELEMENTS");
+	record = query.record();
+	static const int orders[8] = { 0, 1, 3, 4, 2, 7, 5, 6 };
+	while (query.next())
+	{
+		Zone zone;
+		int type = query.value(1).toInt();
+		if (type == 1)
+		{
+			zone.type = Brick;
+			zone.edgeNum = 12;
+		}
+		else if (type == 2)
+		{
+			zone.type = Tetrahedron;
+			zone.edgeNum = 6;
+		}
+
+		zone.vertexNum = query.value(2).toInt();
+		for (int i = 0; i < zone.vertexNum; ++i)
+		{
+			int o = zone.type == Brick ? orders[i] : i;
+			zone.vertices[i] = query.value(o + 3).toInt() - 1;
+		}
+
+		addZone(zone);
+	}
+
+	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
+	query.exec("SELECT * FROM ELEMEDGES");
+	record = query.record();
+	while (query.next())
+	{
+		int num = query.value(2).toInt() * 2;
+		for (int i = 0; i < num; ++i)
+		{
+			wireframeIndices.append(query.value(i + 3).toInt() - 1);
+		}
+	}
+
+	// 查询模型所有表面对应的节点索引信息
+	//query.exec("SELECT * FROM FACETS");
+	//record = query.record();
+	//while (query.next())
+	//{
+	//	Face facet;
+	//	facet.num = query.value(2).toInt();
+	//	for (int i = 0; i < facet.num; ++i)
+	//	{
+	//		facet.indices[i] = query.value(i + 3).toInt() - 1;
+	//	}
+
+	//	facets.append(facet);
+	//}
+
+	// 查询模型所有外表面对应的节点索引信息
+	query.exec("SELECT * FROM EXTERIOR");
+	record = query.record();
+	while (query.next())
+	{
+		Facet facet;
+		facet.num = query.value(3).toInt();
+		if (facet.num == 4)
+		{
+			facet.type = Q4;
+		}
+		else if (facet.num == 3)
+		{
+			facet.type = T3;
+		}
+
+		for (int i = 0; i < facet.num; ++i)
+		{
+			facet.indices[i] = query.value(i + 4).toInt() - 1;
+		}
+
+		addFacet(facet);
+	}
+
 	// 查询计算结果类型、名称
 	//query.exec("SELECT * FROM RSTTYPE");
 	//record = query.record();
@@ -593,6 +530,7 @@ void OpenGLWindow::loadDataFiles()
 				NodeVertex nodeVertex;
 				in >> index >> nodeVertex.position[0] >> nodeVertex.position[1] >> nodeVertex.position[2];
 
+				nodeVertex.position *= 8.0f;
 				mesh.vertices.append(nodeVertex.position);
 				nodeVertices.append(nodeVertex);
             }
@@ -607,13 +545,13 @@ void OpenGLWindow::loadDataFiles()
 				{
 					zone.type = Wedge;
 					zone.vertexNum = 6;
-					zone.edgeNum = 12;
+					zone.edgeNum = 9;
 				}
                 else if (type == "B8")
                 {
                     zone.type = Brick;
                     zone.vertexNum = 8;
-					zone.edgeNum = 9;
+					zone.edgeNum = 12;
                 }
                 else
                 {
@@ -625,86 +563,9 @@ void OpenGLWindow::loadDataFiles()
                 {
                     in >> zone.vertices[i];
                     zone.vertices[i] -= 1;
-					zone.bound.combine(nodeVertices[zone.vertices[i]].position);
                 }
-				zone.bound.centriod = (zone.bound.min + zone.bound.max) * 0.5f;
 
-				if (zone.vertexNum == 8)
-				{
-					zoneIndices.append({ zone.vertices[0], zone.vertices[3], zone.vertices[1],
-						zone.vertices[1], zone.vertices[3], zone.vertices[2],
-						zone.vertices[4], zone.vertices[5], zone.vertices[7],
-						zone.vertices[5], zone.vertices[6], zone.vertices[7],
-						zone.vertices[0], zone.vertices[1], zone.vertices[4],
-						zone.vertices[1], zone.vertices[5], zone.vertices[4],
-						zone.vertices[1], zone.vertices[2], zone.vertices[5],
-						zone.vertices[2], zone.vertices[6], zone.vertices[5],
-						zone.vertices[2], zone.vertices[3], zone.vertices[7],
-						zone.vertices[2], zone.vertices[7], zone.vertices[6],
-						zone.vertices[3], zone.vertices[0], zone.vertices[4],
-						zone.vertices[3], zone.vertices[4], zone.vertices[7]
-						});
-
-					zone.edges[0] = zone.vertices[0];
-					zone.edges[1] = zone.vertices[1];
-					zone.edges[2] = zone.vertices[1];
-					zone.edges[3] = zone.vertices[2];
-					zone.edges[4] = zone.vertices[2];
-					zone.edges[5] = zone.vertices[3];
-					zone.edges[6] = zone.vertices[3];
-					zone.edges[7] = zone.vertices[0];
-
-					zone.edges[8] = zone.vertices[1];
-					zone.edges[9] = zone.vertices[5];
-					zone.edges[10] = zone.vertices[2];
-					zone.edges[11] = zone.vertices[6];
-					zone.edges[12] = zone.vertices[3];
-					zone.edges[13] = zone.vertices[7];
-					zone.edges[14] = zone.vertices[0];
-					zone.edges[15] = zone.vertices[4];
-
-					zone.edges[16] = zone.vertices[5];
-					zone.edges[17] = zone.vertices[6];
-					zone.edges[18] = zone.vertices[6];
-					zone.edges[19] = zone.vertices[7];
-					zone.edges[20] = zone.vertices[7];
-					zone.edges[21] = zone.vertices[4];
-					zone.edges[22] = zone.vertices[4];
-					zone.edges[23] = zone.vertices[5];
-				}
-				else if (zone.vertexNum == 6)
-				{
-					zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[2],
-						zone.vertices[3], zone.vertices[4], zone.vertices[5],
-						zone.vertices[0], zone.vertices[2], zone.vertices[3],
-						zone.vertices[2], zone.vertices[5], zone.vertices[3],
-						zone.vertices[0], zone.vertices[3], zone.vertices[1],
-						zone.vertices[1], zone.vertices[3], zone.vertices[4],
-						zone.vertices[1], zone.vertices[5], zone.vertices[2],
-						zone.vertices[1], zone.vertices[4], zone.vertices[5]
-						});
-
-					zone.edges[0] = zone.vertices[0];
-					zone.edges[1] = zone.vertices[1];
-					zone.edges[2] = zone.vertices[0];
-					zone.edges[3] = zone.vertices[2];
-					zone.edges[4] = zone.vertices[1];
-					zone.edges[5] = zone.vertices[2];
-					zone.edges[6] = zone.vertices[3];
-					zone.edges[7] = zone.vertices[5];
-					zone.edges[8] = zone.vertices[3];
-					zone.edges[9] = zone.vertices[4];
-					zone.edges[10] = zone.vertices[4];
-					zone.edges[11] = zone.vertices[5];
-					zone.edges[12] = zone.vertices[0];
-					zone.edges[13] = zone.vertices[3];
-					zone.edges[14] = zone.vertices[2];
-					zone.edges[15] = zone.vertices[5];
-					zone.edges[16] = zone.vertices[1];
-					zone.edges[17] = zone.vertices[4];
-				}
-
-				zones.append(zone);
+				addZone(zone);
             }
             else if (header == "F")
             {
@@ -790,6 +651,12 @@ void OpenGLWindow::loadDataFiles()
 
         sigForceFile.close();
 	}
+
+	// zone的缓存计算
+	for (Zone& zone : zones)
+	{
+		zone.cache(nodeVertices);
+	}
 }
 
 void OpenGLWindow::addFacet(Facet& facet)
@@ -842,6 +709,114 @@ void OpenGLWindow::addFacet(Facet& facet)
 	}
 }
 
+void OpenGLWindow::addZone(Zone& zone)
+{
+	for (int i = 0; i < zone.vertexNum; ++i)
+	{
+		zone.bound.combine(nodeVertices[zone.vertices[i]].position);
+	}
+	zone.bound.centriod = (zone.bound.min + zone.bound.max) * 0.5f;
+
+	if (zone.vertexNum == 8)
+	{
+		zoneIndices.append({ zone.vertices[0], zone.vertices[2], zone.vertices[1],
+			zone.vertices[1], zone.vertices[2], zone.vertices[4],
+			zone.vertices[0], zone.vertices[3], zone.vertices[2],
+			zone.vertices[2], zone.vertices[3], zone.vertices[5],
+			zone.vertices[2], zone.vertices[5], zone.vertices[4],
+			zone.vertices[4], zone.vertices[5], zone.vertices[7],
+			zone.vertices[1], zone.vertices[4], zone.vertices[6],
+			zone.vertices[4], zone.vertices[7], zone.vertices[6],
+			zone.vertices[0], zone.vertices[1], zone.vertices[3],
+			zone.vertices[1], zone.vertices[6], zone.vertices[3],
+			zone.vertices[3], zone.vertices[6], zone.vertices[5],
+			zone.vertices[6], zone.vertices[7], zone.vertices[5]
+			});
+
+		zone.edges[0] = zone.vertices[0];
+		zone.edges[1] = zone.vertices[1];
+		zone.edges[2] = zone.vertices[1];
+		zone.edges[3] = zone.vertices[4];
+		zone.edges[4] = zone.vertices[4];
+		zone.edges[5] = zone.vertices[2];
+		zone.edges[6] = zone.vertices[2];
+		zone.edges[7] = zone.vertices[0];
+
+		zone.edges[8] = zone.vertices[3];
+		zone.edges[9] = zone.vertices[6];
+		zone.edges[10] = zone.vertices[6];
+		zone.edges[11] = zone.vertices[7];
+		zone.edges[12] = zone.vertices[7];
+		zone.edges[13] = zone.vertices[5];
+		zone.edges[14] = zone.vertices[5];
+		zone.edges[15] = zone.vertices[3];
+
+		zone.edges[16] = zone.vertices[0];
+		zone.edges[17] = zone.vertices[3];
+		zone.edges[18] = zone.vertices[1];
+		zone.edges[19] = zone.vertices[6];
+		zone.edges[20] = zone.vertices[4];
+		zone.edges[21] = zone.vertices[7];
+		zone.edges[22] = zone.vertices[2];
+		zone.edges[23] = zone.vertices[5];
+	}
+	else if (zone.vertexNum == 6)
+	{
+		zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[3],
+			zone.vertices[2], zone.vertices[5], zone.vertices[4],
+			zone.vertices[0], zone.vertices[2], zone.vertices[1],
+			zone.vertices[1], zone.vertices[2], zone.vertices[4],
+			zone.vertices[1], zone.vertices[5], zone.vertices[3],
+			zone.vertices[1], zone.vertices[4], zone.vertices[5],
+			zone.vertices[0], zone.vertices[3], zone.vertices[2],
+			zone.vertices[2], zone.vertices[3], zone.vertices[5]
+			});
+
+		zone.edges[0] = zone.vertices[0];
+		zone.edges[1] = zone.vertices[1];
+		zone.edges[2] = zone.vertices[1];
+		zone.edges[3] = zone.vertices[3];
+		zone.edges[4] = zone.vertices[3];
+		zone.edges[5] = zone.vertices[0];
+		zone.edges[6] = zone.vertices[2];
+		zone.edges[7] = zone.vertices[4];
+		zone.edges[8] = zone.vertices[4];
+		zone.edges[9] = zone.vertices[5];
+		zone.edges[10] = zone.vertices[5];
+		zone.edges[11] = zone.vertices[2];
+		zone.edges[12] = zone.vertices[1];
+		zone.edges[13] = zone.vertices[4];
+		zone.edges[14] = zone.vertices[3];
+		zone.edges[15] = zone.vertices[5];
+		zone.edges[16] = zone.vertices[0];
+		zone.edges[17] = zone.vertices[2];
+	}
+	else if (zone.vertexNum == 4)
+	{
+		zoneIndices.append({ zone.vertices[0], zone.vertices[1], zone.vertices[3],
+			zone.vertices[0], zone.vertices[3], zone.vertices[2],
+			zone.vertices[1], zone.vertices[2], zone.vertices[3],
+			zone.vertices[0], zone.vertices[2], zone.vertices[1],
+			});
+
+		zone.edges[0] = zone.vertices[0];
+		zone.edges[1] = zone.vertices[1];
+		zone.edges[2] = zone.vertices[0];
+		zone.edges[3] = zone.vertices[2];
+		zone.edges[4] = zone.vertices[1];
+		zone.edges[5] = zone.vertices[2];
+		zone.edges[6] = zone.vertices[0];
+		zone.edges[7] = zone.vertices[3];
+		zone.edges[8] = zone.vertices[1];
+		zone.edges[9] = zone.vertices[3];
+		zone.edges[10] = zone.vertices[2];
+		zone.edges[11] = zone.vertices[3];
+	}
+
+	zone.cache(nodeVertices);
+	zones.append(zone);
+}
+
 void OpenGLWindow::preprocess()
 {
 	profileTimer.start();
@@ -867,6 +842,28 @@ void OpenGLWindow::preprocess()
 	qint64 buildTime = profileTimer.restart();
 
 	qDebug() << "clean time:" << cleanTime << "build time:" << buildTime;
+
+	float value;
+	GeoUtil::interpZones(zones, bvhRoot, QVector3D(0.0f, 0.0f, 0.0f), value);
+
+	// 测试等值面绘制
+	float equalValue = 0.025f;
+	auto sdf = [this, equalValue](MeshReconstruction::Vec3 const& pos)
+	{
+		float value;
+		GeoUtil::interpZones(zones, bvhRoot, QVector3D(pos.x, pos.y, pos.z), value);
+		return value - equalValue;
+	};
+
+	MeshReconstruction::Rect3 domain;
+	QVector3D min = bvhRoot->bound.min;
+	QVector3D size = bvhRoot->bound.size();
+	domain.min = { min[0], min[1], min[2] };
+	domain.size = { size[0], size[1], size[2] };
+
+	MeshReconstruction::Vec3 cubeSize = domain.size * 0.01;
+	auto mesh = MarchCube(sdf, domain, cubeSize);
+	MeshReconstruction::WriteObjFile(mesh, "surface.obj");
 }
 
 void OpenGLWindow::clipZones()

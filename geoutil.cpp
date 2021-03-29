@@ -7,107 +7,7 @@
 #include <algorithm>
 #include <fstream>
 
-void Bound::scale(float s)
-{
-	QVector3D offset = (max - min) * (s - 1.0f);
-	min -= offset;
-	max += offset;
-}
-
-Bound Bound::scaled(float s)
-{
-	QVector3D offset = (max - min) * (s - 1.0f);
-	return Bound{ min - offset, max + offset };
-}
-
-void Bound::combine(const QVector3D& position)
-{
-	min = qMinVec3(min, position);
-	max = qMaxVec3(max, position);
-}
-
-void Bound::combine(const Bound& bound)
-{
-	min = qMinVec3(min, bound.min);
-	max = qMaxVec3(max, bound.max);
-}
-
-int Bound::maxDim()
-{
-	QVector3D size = max - min;
-	if (size[0] > size[1] && size[0] > size[2])
-	{
-		return 0;
-	}
-	if (size[1] > size[0] && size[1] > size[2])
-	{
-		return 1;
-	}
-	return 2;
-}
-
-bool Bound::intersect(const Plane& plane)
-{
-	if (intersectFlag != -1)
-	{
-		return intersectFlag;
-	}
-
-	bool first = calcPointPlaneSide(corners[0], plane);
-	for (int i = 1; i < 8; i++)
-	{
-		bool other = calcPointPlaneSide(corners[i], plane);
-		if (other != first)
-		{
-			intersectFlag = 1;
-			return true;
-		}
-	}
-
-	intersectFlag = 0;
-	return false;
-}
-
-bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
-{
-	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
-}
-
-void Bound::cache()
-{
-	corners[0] = QVector3D(min[0], min[1], min[2]);
-	corners[1] = QVector3D(min[0], min[1], max[2]);
-	corners[2] = QVector3D(min[0], max[1], min[2]);
-	corners[3] = QVector3D(min[0], max[1], max[2]);
-	corners[4] = QVector3D(max[0], min[1], min[2]);
-	corners[5] = QVector3D(max[0], min[1], max[2]);
-	corners[6] = QVector3D(max[0], max[1], min[2]);
-	corners[7] = QVector3D(max[0], max[1], max[2]);
-}
-
-void Bound::reset()
-{
-	intersectFlag = -1;
-}
-
-QVector3D qMinVec3(const QVector3D& lhs, const QVector3D& rhs)
-{
-	return QVector3D(
-		qMin(lhs[0], rhs[0]),
-		qMin(lhs[1], rhs[1]),
-		qMin(lhs[2], rhs[2])
-	);
-}
-
-QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
-{
-	return QVector3D(
-		qMax(lhs[0], rhs[0]),
-		qMax(lhs[1], rhs[1]),
-		qMax(lhs[2], rhs[2])
-	);
-}
-
+// GeoUtil成员函数实现
 void GeoUtil::loadObjMesh(const char* fileName, Mesh& mesh)
 {
 	QFile inputFile(fileName);
@@ -479,16 +379,6 @@ bool GeoUtil::validateMesh(Mesh& mesh)
 	return true;
 }
 
-BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh)
-{
-	QVector<uint32_t> faces;
-	for (int i = 0; i < mesh.faces.count(); ++i)
-	{
-		faces.append(i);
-	}
-	return buildBVHTree(mesh, faces, 0, mesh.faces.count());
-}
-
 BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones)
 {
 	QVector<uint32_t> zoneIndices;
@@ -497,57 +387,6 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones)
 		zoneIndices.append(i);
 	}
 	return buildBVHTree(zones, zoneIndices, 0, zoneIndices.count());
-}
-
-BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end)
-{
-	BVHTreeNode* node = new BVHTreeNode;
-	int num = end - begin;
-
-	if (num <= 3)
-	{
-		for (int i = begin; i < end; ++i)
-		{
-			uint32_t f = faces[i];
-			const Bound& bound = mesh.faces[f].bound;
-			node->bound.combine(bound);
-			node->bound.cache();
-		}
-
-		for (int i = begin; i < end; ++i)
-		{
-			node->faces.append(faces[i]);
-		}
-		node->children[0] = node->children[1] = nullptr;
-		node->isLeaf = true;
-	}
-	else
-	{
-		Bound centriodBound;
-		for (int i = begin; i < end; ++i)
-		{
-			uint32_t f = faces[i];
-			const Bound& bound = mesh.faces[f].bound;
-			centriodBound.combine(bound.centriod);
-		}
-
-		int dim = centriodBound.maxDim();
-		int mid = (begin + end) * 0.5f;
-		std::nth_element(&faces[begin], &faces[mid], &faces[end - 1] + 1,
-			[&mesh, dim](uint32_t a, uint32_t b)
-		{
-			return mesh.faces[a].bound.centriod[dim] < mesh.faces[b].bound.centriod[dim];
-		});
-
-		node->children[0] = buildBVHTree(mesh, faces, begin, mid);
-		node->children[1] = buildBVHTree(mesh, faces, mid, end);
-		node->bound.combine(node->children[0]->bound);
-		node->bound.combine(node->children[1]->bound);
-		node->bound.cache();
-		node->isLeaf = false;
-	}
-
-	return node;
 }
 
 BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>& zoneIndices, int begin, int end)
@@ -613,6 +452,35 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>
 	return node;
 }
 
+bool GeoUtil::interpZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point, float& value)
+{
+	if (node->isLeaf)
+	{
+		for (uint32_t z : node->zones)
+		{
+			const Zone& zone = zones[z];
+			if (zone.interp(point, value))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	else
+	{
+		if (node->children[0]->bound.contain(point) && interpZones(zones, node->children[0], point, value))
+		{
+			return true;
+		}
+		if (node->children[1]->bound.contain(point) && interpZones(zones, node->children[1], point, value))
+		{
+			return true;
+		}
+
+		return false;
+	}
+}
+
 void GeoUtil::resetBVHTree(BVHTreeNode* node)
 {
 	if (!node)
@@ -650,9 +518,4 @@ void GeoUtil::clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* n
 			clipZones(zones, plane, node->children[1], nodeVertices, intersectionIndexMap, sectionVertices, sectionIndices, sectionWireframes);
 		}
 	}
-}
-
-bool GeoUtil::isVec3NearlyEqual(const QVector3D& lhs, const QVector3D& rhs, float epsilon /*= 0.001f*/)
-{
-	return lhs.distanceToPoint(rhs) < epsilon;
 }
