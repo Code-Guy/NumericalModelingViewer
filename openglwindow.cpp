@@ -7,7 +7,7 @@
 #include <QSqlRecord>
 #include <QMessageBox>
 #include <fstream>
-#include "dualmc.h"
+#include <dualmc/dualmc.h>
 
 OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 {
@@ -745,32 +745,6 @@ void OpenGLWindow::addZone(Zone& zone)
 	}
 	zone.bound.cache();
 
-	if (zone.type == Brick)
-	{
-		const QVector3D firstPosition = nodeVertices[zone.vertices[0]].position;
-		if (firstPosition[0] != zone.bound.min[0])
-		{
-			qSwap(zone.vertices[0], zone.vertices[1]);
-			qSwap(zone.vertices[3], zone.vertices[6]);
-			qSwap(zone.vertices[2], zone.vertices[4]);
-			qSwap(zone.vertices[5], zone.vertices[7]);
-		}
-		if (firstPosition[1] != zone.bound.min[1])
-		{
-			qSwap(zone.vertices[0], zone.vertices[3]);
-			qSwap(zone.vertices[1], zone.vertices[6]);
-			qSwap(zone.vertices[2], zone.vertices[5]);
-			qSwap(zone.vertices[4], zone.vertices[7]);
-		}
-		if (firstPosition[2] != zone.bound.max[2])
-		{
-			qSwap(zone.vertices[0], zone.vertices[2]);
-			qSwap(zone.vertices[1], zone.vertices[4]);
-			qSwap(zone.vertices[3], zone.vertices[5]);
-			qSwap(zone.vertices[6], zone.vertices[7]);
-		}
-	}
-
 	if (zone.vertexNum == 8)
 	{
 		zoneIndices.append({ zone.vertices[0], zone.vertices[2], zone.vertices[1],
@@ -908,49 +882,49 @@ void OpenGLWindow::preprocess()
 				//if (i == 0 || i == dim[0] - 1 ||
 				//	j == 0 || j == dim[1] - 1 ||
 				//	k == 0 || k == dim[2] - 1)
-				//{
+				float value = 0.0f;
+				{
 					QVector3D position;
 					position[0] = qLerp(bound.min[0], bound.max[0], (float)i / (dim[0] - 1));
 					position[1] = qLerp(bound.min[1], bound.max[1], (float)j / (dim[1] - 1));
 					position[2] = qLerp(bound.min[2], bound.max[2], (float)k / (dim[2] - 1));
 
-					float value = 0.0f;
 					if (GeoUtil::interpZones(zones, bvhRoot, position, value))
 					{
 						points.append({ position, value });
 					}
-				//}
-				
-				//voxelData.append(value);
+				}
+
+				voxelData.append(value);
 			}
 		}
 	}
 
 	// 测试等值面绘制
-	//profileTimer.restart();
-	//dualmc::DualMC<float> builder;
-	//std::vector<dualmc::Vertex> vertices;
-	//std::vector<dualmc::Quad> quads;
-	//builder.build(voxelData.constData(), dim[0], dim[1], dim[2], 0.0f, false, false, vertices, quads);
+	profileTimer.restart();
+	dualmc::DualMC<float> builder;
+	std::vector<dualmc::Vertex> vertices;
+	std::vector<dualmc::Quad> quads;
+	builder.build(voxelData.constData(), dim[0], dim[1], dim[2], 0.002f, false, false, vertices, quads);
 
-	//qint64 buildSurfaceTime = profileTimer.restart();
-	//qDebug() << "Build surface:" << buildSurfaceTime;
+	qint64 buildSurfaceTime = profileTimer.restart();
+	qDebug() << "Build surface:" << buildSurfaceTime;
 
-	//// open output file
-	//std::ofstream file("surface.obj");
-	//qDebug() << "Generating OBJ mesh with " << vertices.size() << " vertices and " << quads.size() << " quads";
+	// open output file
+	std::ofstream file("surface.obj");
+	qDebug() << "Generating OBJ mesh with " << vertices.size() << " vertices and " << quads.size() << " quads";
 
-	//// write vertices
-	//for (auto const& v : vertices) {
-	//	file << "v " << v.x << ' ' << v.y << ' ' << v.z << '\n';
-	//}
+	// write vertices
+	for (auto const& v : vertices) {
+		file << "v " << v.x << ' ' << v.y << ' ' << v.z << '\n';
+	}
 
-	//// write quad indices
-	//for (auto const& q : quads) {
-	//	file << "f " << (q.i0 + 1) << ' ' << (q.i1 + 1) << ' ' << (q.i2 + 1) << ' ' << (q.i3 + 1) << '\n';
-	//}
+	// write quad indices
+	for (auto const& q : quads) {
+		file << "f " << (q.i0 + 1) << ' ' << (q.i1 + 1) << ' ' << (q.i2 + 1) << ' ' << (q.i3 + 1) << '\n';
+	}
 
-	//file.close();
+	file.close();
 }
 
 void OpenGLWindow::clipZones()
@@ -1053,14 +1027,4 @@ void OpenGLWindow::bindShadedShaderProgram()
 
 	shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
 	shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
-}
-
-QVector3D OpenGLWindow::toVec3(const std::array<double, 3>& arr3)
-{
-	return QVector3D(arr3[0], arr3[1], arr3[2]);
-}
-
-std::array<double, 3> OpenGLWindow::toArr3(const QVector3D& vec3)
-{
-	return std::array<double, 3>{vec3[0], vec3[1], vec3[2]};
 }

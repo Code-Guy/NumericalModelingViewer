@@ -1,4 +1,5 @@
 #include "geotypes.h"
+#include <mba/mba.hpp>
 
 QVector3D Bound::size()
 {
@@ -13,7 +14,7 @@ void Bound::scale(float s)
 	max += offset;
 }
 
-Bound Bound::scaled(float s)
+Bound Bound::scaled(float s) const
 {
 	QVector3D offset = (max - min) * (s - 1.0f);
 	return Bound{ min - offset, max + offset };
@@ -101,31 +102,12 @@ bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float
 }
 
 // Zone类成员函数实现
-
 void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 {
 	for (int i = 0; i < vertexNum; ++i)
 	{
-		values[i] = nodeVertices[vertices[i]].totalDeformation;
-	}
-
-	if (type == Wedge)
-	{
-		values[6] = values[3];
-		values[7] = values[5];
-	}
-	else if (type == Pyramid)
-	{
-		values[5] = values[6] = values[7] = values[3];
-	}
-	else if (type == DegeneratedBrick)
-	{
-		values[7] = values[6];
-	}
-	else if (type == Tetrahedron)
-	{
-		values[4] = values[2];
-		values[5] = values[6] = values[7] = values[3];
+		coords.push_back(nodeVertices[vertices[i]].position);
+		values.push_back(nodeVertices[vertices[i]].totalDeformation);
 	}
 }
 
@@ -136,13 +118,20 @@ bool Zone::interp(const QVector3D& point, float& value) const
 		return false;
 	}
 
-	float xt = (point[0] - bound.min[0]) / (bound.max[0] - bound.min[0]);
-	float yt = (point[1] - bound.min[1]) / (bound.max[1] - bound.min[1]);
-	float zt = (point[2] - bound.min[2]) / (bound.max[2] - bound.min[2]);
+	float dists[8];
+	float totalDist = 0.0f;
+	for (int i = 0; i < vertexNum; ++i)
+	{
+		dists[i] = qManhattaDistance(point, coords[i]);
+		totalDist += dists[i];
+	}
 
-	value = qTriLerp(values[0], values[1], values[2], values[3],
-		values[4], values[5], values[6], values[7],
-		xt, yt, zt);
+	value = 0.0f;
+	for (int i = 0; i < vertexNum; ++i)
+	{
+		value += (dists[i] / totalDist) * values[i];
+	}
+
 	return true;
 }
 
@@ -164,4 +153,20 @@ bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon /*= 
 {
 	QVector3D v01 = v1 - v0;
 	return qAbs(v01[0]) < epsilon && qAbs(v01[1]) < epsilon && qAbs(v01[2]) < epsilon;
+}
+
+float qManhattaDistance(const QVector3D& v0, const QVector3D& v1)
+{
+	QVector3D v01 = v1 - v0;
+	return qAbs(v01[0]) + qAbs(v01[1]) + qAbs(v01[2]);
+}
+
+QVector3D qToVec3(const std::array<double, 3>& arr3)
+{
+	return QVector3D(arr3[0], arr3[1], arr3[2]);
+}
+
+std::array<double, 3> qToArr3(const QVector3D& vec3)
+{
+	return std::array<double, 3>{vec3[0], vec3[1], vec3[2]};
 }

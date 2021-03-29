@@ -46,9 +46,6 @@ private:
     void bindWireframeShaderProgram();
     void bindShadedShaderProgram();
 
-    QVector3D toVec3(const std::array<double, 3>& arr3);
-    std::array<double, 3> toArr3(const QVector3D& vec3);
-
     QVector<NodeVertex> nodeVertices;
     QVector<NodeVertex> points;
     QVector<Facet> facets;

@@ -30,7 +30,7 @@ struct Bound
 
 	QVector3D size();
 	void scale(float s);
-	Bound scaled(float s);
+	Bound scaled(float s) const;
 	void combine(const QVector3D& position);
 	void combine(const Bound& bound);
 	int maxDim();
@@ -138,8 +138,8 @@ struct Zone
 	Bound bound;
 	bool visited = false;
 
-	float values[8];
-	int valueOrders[8];
+	std::vector<QVector3D> coords;
+	std::vector<float> values;
 	void cache(const QVector<NodeVertex>& nodeVertices);
 	bool interp(const QVector3D& point, float& value) const;
 };
@@ -258,5 +258,7 @@ T qTriLerp(T zxa0, T zxb0, T zya0, T zyb0,
 }
 
 int qMaxDim(const QVector3D& v0, const QVector3D& v1);
-
 bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon = 0.001f);
+float qManhattaDistance(const QVector3D& v0, const QVector3D& v1);
+QVector3D qToVec3(const std::array<double, 3>& arr3);
+std::array<double, 3> qToArr3(const QVector3D& vec3);

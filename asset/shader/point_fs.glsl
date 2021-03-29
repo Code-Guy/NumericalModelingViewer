@@ -19,6 +19,7 @@ const vec3 heatmapColors[5] = vec3[5](
 
 vec3 calcHeatmapColor(float val, float minVal, float maxVal)
 {
+	val = clamp(val, minVal, maxVal);
 	float i = (val - minVal) / (maxVal - minVal) * 4.0;
 	int low = clamp(int(floor(i)), 0, 4);
 	int high = clamp(int(ceil(i)), 0, 4);
