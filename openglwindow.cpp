@@ -6,8 +6,8 @@
 #include <QSqlQuery>
 #include <QSqlRecord>
 #include <QMessageBox>
-#include <MeshReconstruction.h>
-#include <IO.h>
+#include <fstream>
+#include "dualmc.h"
 
 OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 {
@@ -32,6 +32,7 @@ OpenGLWindow::~OpenGLWindow()
 
 	delete camera;
 
+	delete pointShaderProgram;
 	delete wireframeShaderProgram;
 	delete shadedShaderProgram;
 
@@ -87,8 +88,16 @@ void OpenGLWindow::initializeGL()
 
 	// 创建着色器程序
 	{
+		pointShaderProgram = new QOpenGLShaderProgram;
+		bool success = pointShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/point_vs.glsl");
+		Q_ASSERT_X(success, "pointShaderProgram", qPrintable(pointShaderProgram->log()));
+
+		success = pointShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/point_fs.glsl");
+		Q_ASSERT_X(success, "pointShaderProgram", qPrintable(pointShaderProgram->log()));
+		pointShaderProgram->link();
+
 		wireframeShaderProgram = new QOpenGLShaderProgram;
-		bool success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
+		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/wireframe_vs.glsl");
 		Q_ASSERT_X(success, "wireframeShaderProgram", qPrintable(wireframeShaderProgram->log()));
 
 		success = wireframeShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/wireframe_fs.glsl");
@@ -110,6 +119,20 @@ void OpenGLWindow::initializeGL()
 	nodeVBO.bind();
 	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
 	nodeVBO.allocate(nodeVertices.constData(), nodeVertices.count() * sizeof(NodeVertex));
+
+	// 创建点模式相关渲染资源
+	{
+		// create the vertex array object
+		pointVAO.create();
+		pointVAO.bind();
+		pointVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		pointVBO.create();
+		pointVBO.bind();
+		pointVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		pointVBO.allocate(points.constData(), points.count() * sizeof(NodeVertex));
+
+		bindPointShaderProgram();
+	}
 
 	// 创建线框模式相关渲染资源
 	{
@@ -264,11 +287,11 @@ void OpenGLWindow::paintGL()
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionWireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	shadedShaderProgram->bind();
 	shadedShaderProgram->setUniformValue("mvp", mvp);
@@ -278,14 +301,19 @@ void OpenGLWindow::paintGL()
 
 	zoneVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	facetVAO.bind();
 	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	pointVAO.bind();
+	pointShaderProgram->bind();
+	pointShaderProgram->setUniformValue("mvp", mvp);
+	glDrawArrays(GL_POINTS, 0, points.count());
 
 	//objVAO.bind();
 	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
@@ -715,7 +743,33 @@ void OpenGLWindow::addZone(Zone& zone)
 	{
 		zone.bound.combine(nodeVertices[zone.vertices[i]].position);
 	}
-	zone.bound.centriod = (zone.bound.min + zone.bound.max) * 0.5f;
+	zone.bound.cache();
+
+	if (zone.type == Brick)
+	{
+		const QVector3D firstPosition = nodeVertices[zone.vertices[0]].position;
+		if (firstPosition[0] != zone.bound.min[0])
+		{
+			qSwap(zone.vertices[0], zone.vertices[1]);
+			qSwap(zone.vertices[3], zone.vertices[6]);
+			qSwap(zone.vertices[2], zone.vertices[4]);
+			qSwap(zone.vertices[5], zone.vertices[7]);
+		}
+		if (firstPosition[1] != zone.bound.min[1])
+		{
+			qSwap(zone.vertices[0], zone.vertices[3]);
+			qSwap(zone.vertices[1], zone.vertices[6]);
+			qSwap(zone.vertices[2], zone.vertices[5]);
+			qSwap(zone.vertices[4], zone.vertices[7]);
+		}
+		if (firstPosition[2] != zone.bound.max[2])
+		{
+			qSwap(zone.vertices[0], zone.vertices[2]);
+			qSwap(zone.vertices[1], zone.vertices[4]);
+			qSwap(zone.vertices[3], zone.vertices[5]);
+			qSwap(zone.vertices[6], zone.vertices[7]);
+		}
+	}
 
 	if (zone.vertexNum == 8)
 	{
@@ -840,30 +894,63 @@ void OpenGLWindow::preprocess()
 	// 构建bvh树
 	bvhRoot = GeoUtil::buildBVHTree(zones);
 	qint64 buildTime = profileTimer.restart();
-
 	qDebug() << "clean time:" << cleanTime << "build time:" << buildTime;
 
-	float value;
-	GeoUtil::interpZones(zones, bvhRoot, QVector3D(0.0f, 0.0f, 0.0f), value);
+	std::array<int, 3> dim = { 100, 100, 100 };
+	const Bound& bound = bvhRoot->bound;
+	QVector<float> voxelData;
+	for (int i = 0; i < dim[0]; ++i)
+	{
+		for (int j = 0; j < dim[1]; ++j)
+		{
+			for (int k = 0; k < dim[2]; ++k)
+			{
+				//if (i == 0 || i == dim[0] - 1 ||
+				//	j == 0 || j == dim[1] - 1 ||
+				//	k == 0 || k == dim[2] - 1)
+				//{
+					QVector3D position;
+					position[0] = qLerp(bound.min[0], bound.max[0], (float)i / (dim[0] - 1));
+					position[1] = qLerp(bound.min[1], bound.max[1], (float)j / (dim[1] - 1));
+					position[2] = qLerp(bound.min[2], bound.max[2], (float)k / (dim[2] - 1));
+
+					float value = 0.0f;
+					if (GeoUtil::interpZones(zones, bvhRoot, position, value))
+					{
+						points.append({ position, value });
+					}
+				//}
+				
+				//voxelData.append(value);
+			}
+		}
+	}
 
 	// 测试等值面绘制
-	float equalValue = 0.025f;
-	auto sdf = [this, equalValue](MeshReconstruction::Vec3 const& pos)
-	{
-		float value;
-		GeoUtil::interpZones(zones, bvhRoot, QVector3D(pos.x, pos.y, pos.z), value);
-		return value - equalValue;
-	};
+	//profileTimer.restart();
+	//dualmc::DualMC<float> builder;
+	//std::vector<dualmc::Vertex> vertices;
+	//std::vector<dualmc::Quad> quads;
+	//builder.build(voxelData.constData(), dim[0], dim[1], dim[2], 0.0f, false, false, vertices, quads);
 
-	MeshReconstruction::Rect3 domain;
-	QVector3D min = bvhRoot->bound.min;
-	QVector3D size = bvhRoot->bound.size();
-	domain.min = { min[0], min[1], min[2] };
-	domain.size = { size[0], size[1], size[2] };
+	//qint64 buildSurfaceTime = profileTimer.restart();
+	//qDebug() << "Build surface:" << buildSurfaceTime;
 
-	MeshReconstruction::Vec3 cubeSize = domain.size * 0.01;
-	auto mesh = MarchCube(sdf, domain, cubeSize);
-	MeshReconstruction::WriteObjFile(mesh, "surface.obj");
+	//// open output file
+	//std::ofstream file("surface.obj");
+	//qDebug() << "Generating OBJ mesh with " << vertices.size() << " vertices and " << quads.size() << " quads";
+
+	//// write vertices
+	//for (auto const& v : vertices) {
+	//	file << "v " << v.x << ' ' << v.y << ' ' << v.z << '\n';
+	//}
+
+	//// write quad indices
+	//for (auto const& q : quads) {
+	//	file << "f " << (q.i0 + 1) << ' ' << (q.i1 + 1) << ' ' << (q.i2 + 1) << ' ' << (q.i3 + 1) << '\n';
+	//}
+
+	//file.close();
 }
 
 void OpenGLWindow::clipZones()
@@ -894,6 +981,18 @@ void OpenGLWindow::clipZones()
 
 	qint64 clipTime = profileTimer.restart();
 	//qDebug() << clipTime;
+}
+
+void OpenGLWindow::bindPointShaderProgram()
+{
+	pointShaderProgram->bind();
+	pointShaderProgram->enableAttributeArray(0);
+	pointShaderProgram->enableAttributeArray(1);
+	pointShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
+	pointShaderProgram->setAttributeBuffer(1, GL_FLOAT, offsetof(NodeVertex, totalDeformation), 1, sizeof(NodeVertex));
+
+	pointShaderProgram->setUniformValue("valueRange.minValue", valueRange.minTotalDeformation);
+	pointShaderProgram->setUniformValue("valueRange.maxValue", valueRange.maxTotalDeformation);
 }
 
 void OpenGLWindow::bindWireframeShaderProgram()

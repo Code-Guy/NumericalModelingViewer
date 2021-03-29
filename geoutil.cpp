@@ -85,7 +85,7 @@ void GeoUtil::addFace(Mesh& mesh, uint32_t v0, uint32_t v1, uint32_t v2)
 	{
 		face.bound.combine(mesh.vertices[v]);
 	}
-	face.bound.centriod = (face.bound.min + face.bound.max) * 0.5f;
+	face.bound.cache();
 }
 
 void GeoUtil::cleanMesh(Mesh& mesh)

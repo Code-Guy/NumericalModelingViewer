@@ -42,6 +42,7 @@ private:
 	void preprocess();
     void clipZones();
 
+    void bindPointShaderProgram();
     void bindWireframeShaderProgram();
     void bindShadedShaderProgram();
 
@@ -49,6 +50,7 @@ private:
     std::array<double, 3> toArr3(const QVector3D& vec3);
 
     QVector<NodeVertex> nodeVertices;
+    QVector<NodeVertex> points;
     QVector<Facet> facets;
 
 	Mesh mesh;
@@ -58,10 +60,14 @@ private:
     ValueRange valueRange;
 	QVector<int> zoneTypes;
 
+    QOpenGLShaderProgram* pointShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
 	QOpenGLShaderProgram* shadedShaderProgram;
 
     QOpenGLBuffer nodeVBO;
+
+    QOpenGLBuffer pointVBO;
+	QOpenGLVertexArrayObject pointVAO;
 
     QOpenGLVertexArrayObject wireframeVAO;
     QVector<uint32_t> wireframeIndices;

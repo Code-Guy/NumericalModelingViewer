@@ -34,6 +34,7 @@ struct Bound
 	void combine(const QVector3D& position);
 	void combine(const Bound& bound);
 	int maxDim();
+	int matchCorner(const QVector3D& position);
 	bool intersect(const Plane& plane);
 	bool contain(const QVector3D& point) const;
 	void cache();
@@ -138,7 +139,7 @@ struct Zone
 	bool visited = false;
 
 	float values[8];
-	Bound valueBound;
+	int valueOrders[8];
 	void cache(const QVector<NodeVertex>& nodeVertices);
 	bool interp(const QVector3D& point, float& value) const;
 };
@@ -255,3 +256,7 @@ T qTriLerp(T zxa0, T zxb0, T zya0, T zyb0,
 	float n = qBiLerp(zxa1, zxb1, zya1, zyb1, xt, yt);
 	return qLerp(m, n, zt);
 }
+
+int qMaxDim(const QVector3D& v0, const QVector3D& v1);
+
+bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon = 0.001f);
