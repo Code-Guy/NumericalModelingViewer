@@ -1,5 +1,4 @@
 #include "geotypes.h"
-#include <mba/mba.hpp>
 
 QVector3D Bound::size()
 {
@@ -35,18 +34,6 @@ void Bound::combine(const Bound& bound)
 int Bound::maxDim()
 {
 	return qMaxDim(min, max);
-}
-
-int Bound::matchCorner(const QVector3D& position)
-{
-	for (int i = 0; i < 8; ++i)
-	{
-		if (qIsNearlyEqual(corners[i], position))
-		{
-			return i;
-		}
-	}
-	return -1;
 }
 
 bool Bound::intersect(const Plane& plane)
@@ -106,8 +93,31 @@ void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 {
 	for (int i = 0; i < vertexNum; ++i)
 	{
-		coords.push_back(nodeVertices[vertices[i]].position);
-		values.push_back(nodeVertices[vertices[i]].totalDeformation);
+		values[i] = nodeVertices[vertices[i]].totalDeformation;
+	}
+	if (type == Wedge)
+	{
+		values[6] = values[3];
+		values[7] = values[5];
+	}
+	else if (type == Pyramid)
+	{
+		values[5] = values[6] = values[7] = values[3];
+	}
+	else if (type == DegeneratedBrick)
+	{
+		values[7] = values[6];
+	}
+	else if (type == Tetrahedron)
+	{
+		values[4] = values[2];
+		values[5] = values[6] = values[7] = values[3];
+	}
+
+	origin = nodeVertices[vertices[0]].position;
+	for (int i = 0; i < 3; ++i)
+	{
+		axis[i] = nodeVertices[vertices[i + 1]].position - origin;
 	}
 }
 
@@ -118,20 +128,16 @@ bool Zone::interp(const QVector3D& point, float& value) const
 		return false;
 	}
 
-	float dists[8];
-	float totalDist = 0.0f;
-	for (int i = 0; i < vertexNum; ++i)
+	float t[3];
+	QVector3D originToPoint = point - origin;
+	for (int i = 0; i < 3; ++i)
 	{
-		dists[i] = qManhattaDistance(point, coords[i]);
-		totalDist += dists[i];
+		t[i] = QVector3D::dotProduct(originToPoint, axis[i]) / axis[i].lengthSquared();
 	}
 
-	value = 0.0f;
-	for (int i = 0; i < vertexNum; ++i)
-	{
-		value += (dists[i] / totalDist) * values[i];
-	}
-
+	value = qTriLerp(values[0], values[1], values[2], values[4],
+		values[3], values[6], values[5], values[7],
+		t[0], t[1], t[2]);
 	return true;
 }
 

@@ -879,20 +879,15 @@ void OpenGLWindow::preprocess()
 		{
 			for (int k = 0; k < dim[2]; ++k)
 			{
-				//if (i == 0 || i == dim[0] - 1 ||
-				//	j == 0 || j == dim[1] - 1 ||
-				//	k == 0 || k == dim[2] - 1)
-				float value = 0.0f;
-				{
-					QVector3D position;
-					position[0] = qLerp(bound.min[0], bound.max[0], (float)i / (dim[0] - 1));
-					position[1] = qLerp(bound.min[1], bound.max[1], (float)j / (dim[1] - 1));
-					position[2] = qLerp(bound.min[2], bound.max[2], (float)k / (dim[2] - 1));
+				float value = 1e8f;
+				QVector3D position;
+				position[0] = qLerp(bound.min[0], bound.max[0], (float)i / (dim[0] - 1));
+				position[1] = qLerp(bound.min[1], bound.max[1], (float)j / (dim[1] - 1));
+				position[2] = qLerp(bound.min[2], bound.max[2], (float)k / (dim[2] - 1));
 
-					if (GeoUtil::interpZones(zones, bvhRoot, position, value))
-					{
-						points.append({ position, value });
-					}
+				if (GeoUtil::interpZones(zones, bvhRoot, position, value))
+				{
+					points.append({ position, value });
 				}
 
 				voxelData.append(value);
@@ -905,7 +900,7 @@ void OpenGLWindow::preprocess()
 	dualmc::DualMC<float> builder;
 	std::vector<dualmc::Vertex> vertices;
 	std::vector<dualmc::Quad> quads;
-	builder.build(voxelData.constData(), dim[0], dim[1], dim[2], 0.002f, false, false, vertices, quads);
+	builder.build(voxelData.constData(), dim[0], dim[1], dim[2], 0.025f, false, false, vertices, quads);
 
 	qint64 buildSurfaceTime = profileTimer.restart();
 	qDebug() << "Build surface:" << buildSurfaceTime;

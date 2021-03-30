@@ -34,7 +34,6 @@ struct Bound
 	void combine(const QVector3D& position);
 	void combine(const Bound& bound);
 	int maxDim();
-	int matchCorner(const QVector3D& position);
 	bool intersect(const Plane& plane);
 	bool contain(const QVector3D& point) const;
 	void cache();
@@ -138,8 +137,9 @@ struct Zone
 	Bound bound;
 	bool visited = false;
 
-	std::vector<QVector3D> coords;
-	std::vector<float> values;
+	float values[8];
+	QVector3D axis[3];
+	QVector3D origin;
 	void cache(const QVector<NodeVertex>& nodeVertices);
 	bool interp(const QVector3D& point, float& value) const;
 };
