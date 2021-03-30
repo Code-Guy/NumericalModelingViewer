@@ -33,7 +33,7 @@ void Bound::combine(const Bound& bound)
 
 int Bound::maxDim()
 {
-	return qMaxDim(min, max);
+	return qMaxDim(max - min);
 }
 
 bool Bound::intersect(const Plane& plane)
@@ -94,6 +94,7 @@ void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 	for (int i = 0; i < vertexNum; ++i)
 	{
 		values[i] = nodeVertices[vertices[i]].totalDeformation;
+		coords[i] = nodeVertices[vertices[i]].position;
 	}
 	if (type == Wedge)
 	{
@@ -117,7 +118,10 @@ void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 	origin = nodeVertices[vertices[0]].position;
 	for (int i = 0; i < 3; ++i)
 	{
-		axis[i] = nodeVertices[vertices[i + 1]].position - origin;
+		QVector3D rawAxis = nodeVertices[vertices[i + 1]].position - origin;
+		axis[i] = QVector3D(0.0f, 0.0f, 0.0f);
+		int maxDim = qMaxDim(rawAxis);
+		axis[i][maxDim] = rawAxis[maxDim];
 	}
 }
 
@@ -141,14 +145,13 @@ bool Zone::interp(const QVector3D& point, float& value) const
 	return true;
 }
 
-int qMaxDim(const QVector3D& v0, const QVector3D& v1)
+int qMaxDim(const QVector3D& v)
 {
-	QVector3D v01 = v1 - v0;
-	if (v01[0] > v01[1] && v01[0] > v01[2])
+	if (qAbs(v[0]) > qAbs(v[1]) && qAbs(v[0]) > qAbs(v[2]))
 	{
 		return 0;
 	}
-	if (v01[1] > v01[0] && v01[1] > v01[2])
+	if (qAbs(v[1]) > qAbs(v[0]) && qAbs(v[1]) > qAbs(v[2]))
 	{
 		return 1;
 	}

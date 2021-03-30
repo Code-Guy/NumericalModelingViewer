@@ -139,6 +139,7 @@ struct Zone
 
 	float values[8];
 	QVector3D axis[3];
+	//QVector3D coords[8];
 	QVector3D origin;
 	void cache(const QVector<NodeVertex>& nodeVertices);
 	bool interp(const QVector3D& point, float& value) const;
@@ -257,7 +258,7 @@ T qTriLerp(T zxa0, T zxb0, T zya0, T zyb0,
 	return qLerp(m, n, zt);
 }
 
-int qMaxDim(const QVector3D& v0, const QVector3D& v1);
+int qMaxDim(const QVector3D& v);
 bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon = 0.001f);
 float qManhattaDistance(const QVector3D& v0, const QVector3D& v1);
 QVector3D qToVec3(const std::array<double, 3>& arr3);
