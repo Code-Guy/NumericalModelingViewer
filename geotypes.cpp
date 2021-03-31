@@ -94,7 +94,6 @@ void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 	for (int i = 0; i < vertexNum; ++i)
 	{
 		values[i] = nodeVertices[vertices[i]].totalDeformation;
-		coords[i] = nodeVertices[vertices[i]].position;
 	}
 	if (type == Wedge)
 	{

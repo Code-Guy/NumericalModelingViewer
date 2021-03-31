@@ -40,14 +40,16 @@ private:
     void addZone(Zone& zone);
 
 	void preprocess();
+    void interpUniformGrids();
+
     void clipZones();
+    void genIsosurface(float value);
 
     void bindPointShaderProgram();
     void bindWireframeShaderProgram();
     void bindShadedShaderProgram();
 
     QVector<NodeVertex> nodeVertices;
-    QVector<NodeVertex> points;
     QVector<Facet> facets;
 
 	Mesh mesh;
@@ -56,6 +58,8 @@ private:
     QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
+	BVHTreeNode* bvhRoot;
+	UniformGrids uniformGrids;
 
     QOpenGLShaderProgram* pointShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
@@ -88,19 +92,22 @@ private:
 	QOpenGLBuffer sectionWireframeIBO;
 	QVector<uint32_t> sectionWireframeIndices;
 
+	QOpenGLBuffer isosurfaceVBO;
+	QOpenGLVertexArrayObject isosurfaceVAO;
+	QOpenGLBuffer isosurfaceIBO;
+	QVector<NodeVertex> isosurfaceVertices;
+	QVector<uint32_t> isosurfaceIndices;
+
 	QOpenGLBuffer objVBO;
 	QOpenGLVertexArrayObject objVAO;
 	QVector<uint32_t> objIndices;
 	QOpenGLBuffer objIBO;
-	BVHTreeNode* bvhRoot;
 
     class Camera* camera;
     QTimer updateTimer;
     QElapsedTimer deltaElapsedTimer;
     QElapsedTimer globalElapsedTimer;
     QElapsedTimer profileTimer;
-
-	UniformGrids uniformGrids;
 };
 
 #endif // OPENGLWINDOW_H

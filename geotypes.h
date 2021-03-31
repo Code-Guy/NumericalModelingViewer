@@ -154,9 +154,10 @@ struct Facet
 
 struct UniformGrids
 {
-	int dim[3];
+	std::array<int, 3> dim;
 	Bound bound;
-	std::vector<NodeVertex> values;
+	QVector<NodeVertex> points;
+	QVector<float> voxelData;
 };
 
 // Edge操作符重载和哈希函数
@@ -235,13 +236,13 @@ inline QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
 }
 
 template <typename T>
-T qLerp(T a, T b, T t)
+T qLerp(const T& a, const T& b, float t)
 {
 	return a * (1 - t) + b * t;
 }
 
 template <typename T>
-T qBiLerp(T xa, T xb, T ya, T yb, T xt, T yt)
+T qBiLerp(const T& xa, const T& xb, const T& ya, const T& yb, float xt, float yt)
 {
 	float m = qLerp(xa, xb, xt);
 	float n = qLerp(ya, yb, xt);
@@ -249,13 +250,33 @@ T qBiLerp(T xa, T xb, T ya, T yb, T xt, T yt)
 }
 
 template <typename T>
-T qTriLerp(T zxa0, T zxb0, T zya0, T zyb0,
-	T zxa1, T zxb1, T zya1, T zyb1,
-	T xt, T yt, T zt)
+T qTriLerp(const T& zxa0, const T& zxb0, const T& zya0, const T& zyb0,
+	const T& zxa1, const T& zxb1, const T& zya1, const T& zyb1,
+	float xt, float yt, float zt)
 {
 	float m = qBiLerp(zxa0, zxb0, zya0, zyb0, xt, yt);
 	float n = qBiLerp(zxa1, zxb1, zya1, zyb1, xt, yt);
 	return qLerp(m, n, zt);
+}
+
+template <typename T>
+T qClamp(const T& value, const T& min, const T& max)
+{
+	if (value < min)
+	{
+		return min;
+	}
+	if (value > max)
+	{
+		return max;
+	}
+	return value;
+}
+
+template <typename T>
+T qMapClampRange(const T& value, const T& fromMin, const T& fromMax, const T& toMin, const T& toMax)
+{
+	return toMin + (toMax - toMin) * (value - fromMin) / (fromMax - fromMin);
 }
 
 int qMaxDim(const QVector3D& v);
