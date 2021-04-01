@@ -1,6 +1,6 @@
 #include "geotypes.h"
 
-QVector3D Bound::size()
+QVector3D Bound::size() const
 {
 	return max - min;
 }
@@ -155,6 +155,11 @@ int qMaxDim(const QVector3D& v)
 		return 1;
 	}
 	return 2;
+}
+
+float qMaxDimVal(const QVector3D& v)
+{
+	return v[qMaxDim(v)];
 }
 
 bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon /*= 0.001f*/)

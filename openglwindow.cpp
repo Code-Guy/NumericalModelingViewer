@@ -7,6 +7,7 @@
 #include <QSqlRecord>
 #include <QMessageBox>
 #include <fstream>
+#include <QRandomGenerator>
 #include <dualmc/dualmc.h>
 
 OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
@@ -58,6 +59,7 @@ OpenGLWindow::~OpenGLWindow()
 void OpenGLWindow::initializeGL()
 {
 	initializeOpenGLFunctions();
+	qsrand(QTime(0, 0, 0).secsTo(QTime::currentTime()));
 
 	// 设置OGL状态
 	glFrontFace(GL_CCW);
@@ -204,7 +206,6 @@ void OpenGLWindow::initializeGL()
 		sectionIBO.allocate(sectionIndices.constData(), sectionIndices.count() * sizeof(uint32_t));
 		bindShadedShaderProgram();
 		
-
 		// 初始化截面线框资源
 		sectionWireframeIndices.resize(sectionVertices.count() * 5);
 
@@ -218,6 +219,10 @@ void OpenGLWindow::initializeGL()
 		sectionWireframeIBO.bind();
 		sectionWireframeIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
 		sectionWireframeIBO.allocate(sectionWireframeIndices.constData(), sectionWireframeIndices.count() * sizeof(uint32_t));
+
+		sectionVertices.clear();
+		sectionIndices.clear();
+		sectionWireframeIndices.clear();
 		bindWireframeShaderProgram();
 	}
 
@@ -243,6 +248,8 @@ void OpenGLWindow::initializeGL()
 		isosurfaceIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
 		isosurfaceIBO.allocate(isosurfaceIndices.constData(), isosurfaceIndices.count() * sizeof(uint32_t));
 
+		isosurfaceVertices.clear();
+		isosurfaceIndices.clear();
 		bindPointShaderProgram();
 	}
 
@@ -916,20 +923,28 @@ void OpenGLWindow::preprocess()
 
 void OpenGLWindow::interpUniformGrids()
 {
-	std::array<int, 3> dim = { 64, 64, 64 };
 	const Bound& bound = bvhRoot->bound;
+	QVector3D size = bound.size();
+	float maxDimVal = qMaxDimVal(size);
+	int maxDim = 100;
+	std::array<int, 3> dim;
+	for (int i = 0; i < 3; ++i)
+	{
+		dim[i] = size[i] / maxDimVal * maxDim;
+	}
 	uniformGrids.dim = dim;
 	uniformGrids.bound = bound;
-	for (int i = 0; i < dim[0]; ++i)
+
+	for (int x = 0; x < dim[0]; ++x)
 	{
-		for (int j = 0; j < dim[1]; ++j)
+		for (int y = 0; y < dim[1]; ++y)
 		{
-			for (int k = 0; k < dim[2]; ++k)
+			for (int z = 0; z < dim[2]; ++z)
 			{
 				QVector3D position;
-				position[0] = qLerp(bound.min[0], bound.max[0], (float)i / (dim[0] - 1));
-				position[1] = qLerp(bound.min[1], bound.max[1], (float)j / (dim[1] - 1));
-				position[2] = qLerp(bound.min[2], bound.max[2], (float)k / (dim[2] - 1));
+				position[0] = qLerp(bound.min[0], bound.max[0], (float)x / (dim[0] - 1));
+				position[1] = qLerp(bound.min[1], bound.max[1], (float)y / (dim[1] - 1));
+				position[2] = qLerp(bound.min[2], bound.max[2], (float)z / (dim[2] - 1));
 
 				float value;
 				if (GeoUtil::interpZones(zones, bvhRoot, position, value))
@@ -981,7 +996,7 @@ void OpenGLWindow::genIsosurface(float value)
 	std::vector<dualmc::Vertex> vertices;
 	std::vector<dualmc::Quad> quads;
 	builder.build(uniformGrids.voxelData.constData(), 
-		uniformGrids.dim[0], uniformGrids.dim[1], uniformGrids.dim[2], 
+		uniformGrids.dim[2], uniformGrids.dim[1], uniformGrids.dim[0], 
 		value, false, false, vertices, quads);
 
 	qint64 buildIsosurfaceTime = profileTimer.restart();

@@ -28,7 +28,7 @@ struct Bound
 	QVector3D corners[8];
 	int intersectFlag;
 
-	QVector3D size();
+	QVector3D size() const;
 	void scale(float s);
 	Bound scaled(float s) const;
 	void combine(const QVector3D& position);
@@ -280,6 +280,7 @@ T qMapClampRange(const T& value, const T& fromMin, const T& fromMax, const T& to
 }
 
 int qMaxDim(const QVector3D& v);
+float qMaxDimVal(const QVector3D& v);
 bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon = 0.001f);
 float qManhattaDistance(const QVector3D& v0, const QVector3D& v1);
 QVector3D qToVec3(const std::array<double, 3>& arr3);

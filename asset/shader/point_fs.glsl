@@ -30,5 +30,13 @@ vec3 calcHeatmapColor(float val, float minVal, float maxVal)
 
 void main()
 {
+	// float thickness = 0.0001f;
+	// float isoValue = 0.02f;
+	// if (VValue > isoValue + thickness || VValue < isoValue - thickness )
+	// {
+	// 	discard;
+	// 	return;
+	// }
+
 	FColor = vec4(calcHeatmapColor(VValue, valueRange.minValue, valueRange.maxValue), 1.0);
 }

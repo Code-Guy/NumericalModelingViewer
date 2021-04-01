@@ -74,7 +74,15 @@ bool isOnPositiveSideOfPlane(vec3 point, float epsilon = 0.01f)
 
 void main()
 {
-	if ((!skipClip && !isOnPositiveSideOfPlane(VPosition, 1.0f)) || VTotalDeformation > 0.01f)
+	if (!skipClip && !isOnPositiveSideOfPlane(VPosition, 1.0f))
+	{
+		discard;
+		return;
+	}
+
+	float thickness = 0.003f;
+	float isoValue = 0.02f;
+	if (VTotalDeformation > isoValue + thickness || VTotalDeformation < isoValue - thickness )
 	{
 		discard;
 		return;
