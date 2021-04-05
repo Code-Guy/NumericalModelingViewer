@@ -481,6 +481,35 @@ bool GeoUtil::interpZones(const QVector<Zone>& zones, BVHTreeNode* node, const Q
 	}
 }
 
+bool GeoUtil::inZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point)
+{
+	if (node->isLeaf)
+	{
+		for (uint32_t z : node->zones)
+		{
+			const Zone& zone = zones[z];
+			if (zone.bound.contain(point))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	else
+	{
+		if (node->children[0]->bound.contain(point) && inZones(zones, node->children[0], point))
+		{
+			return true;
+		}
+		if (node->children[1]->bound.contain(point) && inZones(zones, node->children[1], point))
+		{
+			return true;
+		}
+
+		return false;
+	}
+}
+
 void GeoUtil::resetBVHTree(BVHTreeNode* node)
 {
 	if (!node)

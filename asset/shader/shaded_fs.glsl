@@ -80,13 +80,13 @@ void main()
 		return;
 	}
 
-	float thickness = 0.003f;
-	float isoValue = 0.02f;
-	if (VTotalDeformation > isoValue + thickness || VTotalDeformation < isoValue - thickness )
-	{
-		discard;
-		return;
-	}
+	// float thickness = 0.003f;
+	// float isoValue = 0.02f;
+	// if (VTotalDeformation > isoValue + thickness || VTotalDeformation < isoValue - thickness )
+	// {
+	// 	discard;
+	// 	return;
+	// }
 
 	FColor = vec4(calcHeatmapColor(VTotalDeformation, valueRange.minTotalDeformation, valueRange.maxTotalDeformation), 1.0);
 	//FColor = vec4(1.0, 1.0, 1.0, 1.0);

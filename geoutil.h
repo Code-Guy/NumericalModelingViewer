@@ -14,6 +14,7 @@ public:
 	static bool validateMesh(Mesh& mesh);
 	static BVHTreeNode* buildBVHTree(const QVector<Zone>& zones);
 	static bool interpZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point, float& value);
+	static bool inZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);

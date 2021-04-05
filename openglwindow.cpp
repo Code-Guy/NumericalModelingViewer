@@ -21,7 +21,8 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	preprocess();
 
 	// 初始化摄像机
-	camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
+	camera = new Camera(QVector3D(943.8f, 926.5f, 969.5f), 237.0f, -36.0f, 240.0f, 0.1f);
+	//camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
 	//camera = new Camera(QVector3D(387.4f, 57.1f, 267.4f), 226.7f, -26.0f, -31.5f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
 	camera->setFovy(60.0f);
@@ -303,56 +304,71 @@ void OpenGLWindow::paintGL()
 	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
 	plane.normal = QVector3D(sinGlobalTime, sinGlobalTime, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	//clipZones();
+	clipZones();
 	float isoValue = qMapClampRange(sinGlobalTime, -1.0f, 1.0f, valueRange.minTotalDeformation, valueRange.maxTotalDeformation);
+	//isoValue = 0.02f;
 	genIsosurface(isoValue);
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	QMatrix4x4 m;
+	QMatrix4x4 m, lm, rm;
+	m.setToIdentity();
+	lm.translate(QVector3D(-600.0f, 0.0f, 0.0f));
+	rm.translate(QVector3D(600.0f, 0.0f, 0.0f));
+
 	QMatrix4x4 v = camera->getViewMatrix();
-	QMatrix4x4 mv = v * m;
-	QMatrix4x4 mvp = camera->getPerspectiveMatrix() * mv;
+	QMatrix4x4 vp = camera->getViewPerspectiveMatrix();
+	QMatrix4x4 mvp = vp * m;
+	QMatrix4x4 lmv = v * lm;
+	QMatrix4x4 lmvp = vp * lm;
+	QMatrix4x4 rmvp = vp * rm;
 
 	wireframeShaderProgram->bind();
-	wireframeShaderProgram->setUniformValue("mvp", mvp);
+	wireframeShaderProgram->setUniformValue("mvp", lmvp);
 	wireframeShaderProgram->setUniformValue("plane.normal", plane.normal);
 	wireframeShaderProgram->setUniformValue("plane.dist", plane.dist);
+
+	wireframeVAO.bind();
+	wireframeShaderProgram->setUniformValue("skipClip", false);
+	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	sectionWireframeVAO.bind();
+	wireframeShaderProgram->setUniformValue("skipClip", true);
+	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	shadedShaderProgram->bind();
+	shadedShaderProgram->setUniformValue("mvp", lmvp);
+	shadedShaderProgram->setUniformValue("mv", v * lmv);
+	shadedShaderProgram->setUniformValue("plane.normal", plane.normal);
+	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
+
+	zoneVAO.bind();
+	shadedShaderProgram->setUniformValue("skipClip", false);
+	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	sectionVAO.bind();
+	shadedShaderProgram->setUniformValue("skipClip", true);
+	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	wireframeShaderProgram->bind();
+	wireframeShaderProgram->setUniformValue("mvp", rmvp);
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
 	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-	sectionWireframeVAO.bind();
-	wireframeShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
-
-	shadedShaderProgram->bind();
-	shadedShaderProgram->setUniformValue("mvp", mvp);
-	shadedShaderProgram->setUniformValue("mv", mv);
-	shadedShaderProgram->setUniformValue("plane.normal", plane.normal);
-	shadedShaderProgram->setUniformValue("plane.dist", plane.dist);
-
-	zoneVAO.bind();
-	shadedShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
-
-	facetVAO.bind();
-	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
-
-	sectionVAO.bind();
-	shadedShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
-
 	pointShaderProgram->bind();
-	pointShaderProgram->setUniformValue("mvp", mvp);
-
-	pointVAO.bind();
-	//glDrawArrays(GL_POINTS, 0, uniformGrids.points.count());
+	pointShaderProgram->setUniformValue("mvp", rmvp);
 
 	isosurfaceVAO.bind();
 	glDrawElements(GL_TRIANGLES, isosurfaceIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	//pointVAO.bind();
+	//glDrawArrays(GL_POINTS, 0, uniformGrids.points.count());
+
+	//facetVAO.bind();
+	//glDrawElements(GL_TRIANGLES, facetIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	//objVAO.bind();
 	//glDrawElements(GL_TRIANGLES, objIndices.count(), GL_UNSIGNED_INT, nullptr);
@@ -1015,8 +1031,18 @@ void OpenGLWindow::genIsosurface(float value)
 	isosurfaceIndices.clear();
 	for (const auto& quad : quads)
 	{
-		isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i1, (uint32_t)quad.i2,
-			(uint32_t)quad.i0, (uint32_t)quad.i2, (uint32_t)quad.i3 });
+		if (GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i0].position) &&
+			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i1].position) &&
+			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i2].position))
+		{
+			isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i1, (uint32_t)quad.i2});
+		}
+		if (GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i0].position) &&
+			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i2].position) &&
+			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i3].position))
+		{
+			isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i2, (uint32_t)quad.i3 });
+		}
 	}
 
 	// 更新GPU缓存资源
