@@ -200,6 +200,126 @@ void GeoUtil::clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* r
 	}
 }
 
+QVector<ClipLine> GeoUtil::genIsolines(Mesh& mesh, QVector<NodeVertex>& nodeVertices, float value, BVHTreeNode* root)
+{
+	QVector<ClipLine> clipLines;
+	resetMeshVisited(mesh);
+	resetBVHTree(root);
+
+	QElapsedTimer profileTimer;
+	profileTimer.start();
+	QMap<Edge, QVector3D> hits;
+	findAllIsoEdges(mesh, nodeVertices, value, root, hits);
+	resetMeshVisited(mesh);
+	qint64 t0 = profileTimer.restart();
+
+	while (!hits.isEmpty())
+	{
+		ClipLine clipLine;
+		QQueue<QPair<Edge, bool>> queue;
+		queue.enqueue({ hits.begin().key(), true });
+		clipLine.vertices.push_front(hits.begin().value());
+		hits.remove(hits.begin().key());
+
+		while (!queue.isEmpty())
+		{
+			QPair<Edge, bool> pair = queue.dequeue();
+			const Edge& mainEdge = pair.first;
+			bool positive = pair.second;
+			for (uint32_t f : mesh.edges[mainEdge])
+			{
+				Face& neighborFace = mesh.faces[f];
+				if (!neighborFace.visited)
+				{
+					neighborFace.visited = true;
+
+					for (const Edge& neighborEdge : neighborFace.edges)
+					{
+						if (!(neighborEdge == mainEdge) && hits.contains(neighborEdge))
+						{
+							QVector3D intersection = hits[neighborEdge];
+							if (positive)
+							{
+								if (!qIsNearlyEqual(intersection, clipLine.vertices.back()))
+								{
+									clipLine.vertices.push_back(intersection);
+								}
+							}
+							else
+							{
+								if (!qIsNearlyEqual(intersection, clipLine.vertices.front()))
+								{
+									clipLine.vertices.push_front(intersection);
+								}
+							}
+
+							hits.remove(neighborEdge);
+							queue.enqueue({ neighborEdge, positive });
+							positive = !positive;
+
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		clipLines.append(clipLine);
+	}
+
+	qint64 t1 = profileTimer.restart();
+	//qDebug() << t0 << t1;
+
+	return clipLines;
+}
+
+void GeoUtil::findAllIsoEdges(Mesh& mesh, QVector<NodeVertex>& nodeVertices, float value, BVHTreeNode* node, QMap<Edge, QVector3D>& hits)
+{
+	if (node->isLeaf)
+	{
+		for (uint32_t f : node->faces)
+		{
+			Face& face = mesh.faces[f];
+			if (!face.visited)
+			{
+				face.visited = true;
+				findIsoEdges(mesh, nodeVertices, mesh.faces[f], value, hits);
+			}
+		}
+	}
+	else
+	{
+		QVector3D isoPoint(value, value, value);
+		if (node->children[0]->bound.contain(isoPoint))
+		{
+			findAllIsoEdges(mesh, nodeVertices, value, node->children[0], hits);
+		}
+		if (node->children[1]->bound.contain(isoPoint))
+		{
+			findAllIsoEdges(mesh, nodeVertices, value, node->children[1], hits);
+		}
+	}
+}
+
+void GeoUtil::findIsoEdges(const Mesh& mesh, QVector<NodeVertex>& nodeVertices, const Face& face, float value, QMap<Edge, QVector3D>& hits)
+{
+	for (const Edge& edge : face.edges)
+	{
+		if (hits.contains(edge))
+		{
+			continue;
+		}
+
+		const NodeVertex& nv0 = nodeVertices[edge.vertices[0]];
+		const NodeVertex& nv1 = nodeVertices[edge.vertices[1]];
+		if ((value - nv0.totalDeformation) * (value - nv1.totalDeformation) <= 0)
+		{
+			QVector3D intersection = qLerp(nv0.position, nv1.position, (value - nv0.totalDeformation) / (nv1.totalDeformation - nv0.totalDeformation));
+			hits[edge] = intersection;
+		}
+	}
+}
+
 void GeoUtil::fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace)
 {
 	for (int i = 0; i < 3; ++i)
@@ -379,6 +499,64 @@ bool GeoUtil::validateMesh(Mesh& mesh)
 	return true;
 }
 
+bool GeoUtil::interpZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point, float& value)
+{
+	if (node->isLeaf)
+	{
+		for (uint32_t z : node->zones)
+		{
+			const Zone& zone = zones[z];
+			if (zone.interp(point, value))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	else
+	{
+		if (node->children[0]->bound.contain(point) && interpZones(zones, node->children[0], point, value))
+		{
+			return true;
+		}
+		if (node->children[1]->bound.contain(point) && interpZones(zones, node->children[1], point, value))
+		{
+			return true;
+		}
+
+		return false;
+	}
+}
+
+bool GeoUtil::inZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point)
+{
+	if (node->isLeaf)
+	{
+		for (uint32_t z : node->zones)
+		{
+			const Zone& zone = zones[z];
+			if (zone.bound.contain(point))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	else
+	{
+		if (node->children[0]->bound.contain(point) && inZones(zones, node->children[0], point))
+		{
+			return true;
+		}
+		if (node->children[1]->bound.contain(point) && inZones(zones, node->children[1], point))
+		{
+			return true;
+		}
+
+		return false;
+	}
+}
+
 BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones)
 {
 	QVector<uint32_t> zoneIndices;
@@ -387,6 +565,79 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones)
 		zoneIndices.append(i);
 	}
 	return buildBVHTree(zones, zoneIndices, 0, zoneIndices.count());
+}
+
+BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh)
+{
+	QVector<uint32_t> faces;
+	for (int i = 0; i < mesh.faces.count(); ++i)
+	{
+		faces.append(i);
+	}
+	return buildBVHTree(mesh, faces, 0, mesh.faces.count());
+}
+
+BVHTreeNode* GeoUtil::buildBVHTree(const Mesh& mesh, QVector<uint32_t>& faces, int begin, int end)
+{
+	BVHTreeNode* node = new BVHTreeNode;
+	int num = end - begin;
+
+	if (num <= 3)
+	{
+		for (int i = begin; i < end; ++i)
+		{
+			uint32_t f = faces[i];
+			const Bound& bound = mesh.faces[f].bound;
+			node->bound.combine(bound);
+			node->bound.cache();
+		}
+
+		for (int i = begin; i < end; ++i)
+		{
+			node->faces.append(faces[i]);
+		}
+		node->children[0] = node->children[1] = nullptr;
+		node->depth = 0;
+		node->isLeaf = true;
+	}
+	else
+	{
+		Bound centriodBound;
+		for (int i = begin; i < end; ++i)
+		{
+			uint32_t f = faces[i];
+			const Bound& bound = mesh.faces[f].bound;
+			centriodBound.combine(bound.centriod);
+		}
+
+		int dim = centriodBound.maxDim();
+		int mid = (begin + end) * 0.5f;
+		std::nth_element(&faces[begin], &faces[mid], &faces[end - 1] + 1,
+			[&mesh, dim](uint32_t a, uint32_t b)
+		{
+			return mesh.faces[a].bound.centriod[dim] < mesh.faces[b].bound.centriod[dim];
+		});
+
+		int depth[2] = { 0, 0 };
+		if (begin < mid)
+		{
+			node->children[0] = buildBVHTree(mesh, faces, begin, mid);
+			node->bound.combine(node->children[0]->bound);
+			depth[0] = node->children[0]->depth + 1;
+		}
+
+		if (mid < end)
+		{
+			node->children[1] = buildBVHTree(mesh, faces, mid, end);
+			node->bound.combine(node->children[1]->bound);
+			depth[1] = node->children[1]->depth + 1;
+		}
+
+		node->bound.cache();
+		node->depth = qMax(depth[0], depth[1]);
+	}
+
+	return node;
 }
 
 BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>& zoneIndices, int begin, int end)
@@ -450,64 +701,6 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>
 	}
 
 	return node;
-}
-
-bool GeoUtil::interpZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point, float& value)
-{
-	if (node->isLeaf)
-	{
-		for (uint32_t z : node->zones)
-		{
-			const Zone& zone = zones[z];
-			if (zone.interp(point, value))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-	else
-	{
-		if (node->children[0]->bound.contain(point) && interpZones(zones, node->children[0], point, value))
-		{
-			return true;
-		}
-		if (node->children[1]->bound.contain(point) && interpZones(zones, node->children[1], point, value))
-		{
-			return true;
-		}
-
-		return false;
-	}
-}
-
-bool GeoUtil::inZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point)
-{
-	if (node->isLeaf)
-	{
-		for (uint32_t z : node->zones)
-		{
-			const Zone& zone = zones[z];
-			if (zone.bound.contain(point))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-	else
-	{
-		if (node->children[0]->bound.contain(point) && inZones(zones, node->children[0], point))
-		{
-			return true;
-		}
-		if (node->children[1]->bound.contain(point) && inZones(zones, node->children[1], point))
-		{
-			return true;
-		}
-
-		return false;
-	}
 }
 
 void GeoUtil::resetBVHTree(BVHTreeNode* node)

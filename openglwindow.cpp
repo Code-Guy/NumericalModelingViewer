@@ -50,6 +50,8 @@ OpenGLWindow::~OpenGLWindow()
 	sectionIBO.destroy();
 	sectionWireframeVAO.destroy();
 	sectionWireframeIBO.destroy();
+	isolineVAO.destroy();
+	isolineVBO.destroy();
 	objVAO.destroy();
 	objVBO.destroy();
 	objIBO.destroy();
@@ -254,6 +256,24 @@ void OpenGLWindow::initializeGL()
 		bindPointShaderProgram();
 	}
 
+	// 创建等值线相关渲染资源
+	{
+		const int kMaxIsolineVertexNum = 5000;
+		isolineVertices.resize(kMaxIsolineVertexNum);
+
+		isolineVAO.create();
+		isolineVAO.bind();
+
+		isolineVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		isolineVBO.create();
+		isolineVBO.bind();
+		isolineVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
+		isolineVBO.allocate(isolineVertices.constData(), isolineVertices.count() * sizeof(NodeVertex));
+
+		isolineVertices.clear();
+		bindPointShaderProgram();
+	}
+
 	// 创建obj模型相关渲染资源
 	{
 		objVAO.create();
@@ -308,20 +328,23 @@ void OpenGLWindow::paintGL()
 	float isoValue = qMapClampRange(sinGlobalTime, -1.0f, 1.0f, valueRange.minTotalDeformation, valueRange.maxTotalDeformation);
 	//isoValue = 0.02f;
 	genIsosurface(isoValue);
+	genIsolines(isoValue);
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	QMatrix4x4 m, lm, rm;
+	QMatrix4x4 m, lm, cm, rm;
 	m.setToIdentity();
-	lm.translate(QVector3D(-600.0f, 0.0f, 0.0f));
-	rm.translate(QVector3D(600.0f, 0.0f, 0.0f));
+	lm.translate(QVector3D(-1200.0f, 0.0f, 0.0f));
+	cm.translate(QVector3D(0.0f, 0.0f, 0.0f));
+	rm.translate(QVector3D(1200.0f, 0.0f, 0.0f));
 
 	QMatrix4x4 v = camera->getViewMatrix();
 	QMatrix4x4 vp = camera->getViewPerspectiveMatrix();
 	QMatrix4x4 mvp = vp * m;
 	QMatrix4x4 lmv = v * lm;
 	QMatrix4x4 lmvp = vp * lm;
+	QMatrix4x4 cmvp = vp * cm;
 	QMatrix4x4 rmvp = vp * rm;
 
 	wireframeShaderProgram->bind();
@@ -352,17 +375,23 @@ void OpenGLWindow::paintGL()
 	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	wireframeShaderProgram->bind();
-	wireframeShaderProgram->setUniformValue("mvp", rmvp);
+	wireframeShaderProgram->setUniformValue("mvp", cmvp);
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
 	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	pointShaderProgram->bind();
-	pointShaderProgram->setUniformValue("mvp", rmvp);
+	pointShaderProgram->setUniformValue("mvp", cmvp);
 
 	isosurfaceVAO.bind();
 	glDrawElements(GL_TRIANGLES, isosurfaceIndices.count(), GL_UNSIGNED_INT, nullptr);
+
+	pointShaderProgram->bind();
+	pointShaderProgram->setUniformValue("mvp", rmvp);
+
+	isolineVAO.bind();
+	glDrawArrays(GL_LINES, 0, isolineVertices.count());
 
 	//pointVAO.bind();
 	//glDrawArrays(GL_POINTS, 0, uniformGrids.points.count());
@@ -926,10 +955,28 @@ void OpenGLWindow::preprocess()
 	qint64 cleanTime = profileTimer.restart();
 	qDebug() << "clean mesh time:" << cleanTime;
 
+	// 更新外表面的包围盒（使用数字范围替换坐标范围）
+	for (Face& face : mesh.faces)
+	{
+		const NodeVertex& nv0 = nodeVertices[face.vertices[0]];
+		const NodeVertex& nv1 = nodeVertices[face.vertices[1]];
+		const NodeVertex& nv2 = nodeVertices[face.vertices[2]];
+
+		float minVal = qMin3(nv0.totalDeformation, nv1.totalDeformation, nv2.totalDeformation);
+		float maxVal = qMax3(nv0.totalDeformation, nv1.totalDeformation, nv2.totalDeformation);
+		face.bound.min = QVector3D(minVal, minVal, minVal);
+		face.bound.max = QVector3D(maxVal, maxVal, maxVal);
+		face.bound.cache();
+	}
+
 	// 构建bvh树
-	bvhRoot = GeoUtil::buildBVHTree(zones);
-	qint64 buildTime = profileTimer.restart();
-	qDebug() << "build bvh tree time:" << buildTime;
+	zoneBVHRoot = GeoUtil::buildBVHTree(zones);
+	qint64 buildZoneBVHTreeTime = profileTimer.restart();
+	qDebug() << "build zone bvh tree time:" << buildZoneBVHTreeTime;
+
+	faceBVHRoot = GeoUtil::buildBVHTree(mesh);
+	qint64 buildFaceBVHTreeTime = profileTimer.restart();
+	qDebug() << "build face bvh tree time:" << buildFaceBVHTreeTime;
 
 	// 插值均匀网格
 	interpUniformGrids();
@@ -939,7 +986,7 @@ void OpenGLWindow::preprocess()
 
 void OpenGLWindow::interpUniformGrids()
 {
-	const Bound& bound = bvhRoot->bound;
+	const Bound& bound = zoneBVHRoot->bound;
 	QVector3D size = bound.size();
 	float maxDimVal = qMaxDimVal(size);
 	int maxDim = 100;
@@ -963,7 +1010,7 @@ void OpenGLWindow::interpUniformGrids()
 				position[2] = qLerp(bound.min[2], bound.max[2], (float)z / (dim[2] - 1));
 
 				float value;
-				if (GeoUtil::interpZones(zones, bvhRoot, position, value))
+				if (GeoUtil::interpZones(zones, zoneBVHRoot, position, value))
 				{
 					uniformGrids.points.append({ position, value });
 				}
@@ -977,7 +1024,7 @@ void OpenGLWindow::interpUniformGrids()
 void OpenGLWindow::clipZones()
 {
 	profileTimer.start();
-	GeoUtil::clipZones(zones, plane, bvhRoot, nodeVertices, sectionVertices, sectionIndices, sectionWireframeIndices);
+	GeoUtil::clipZones(zones, plane, zoneBVHRoot, nodeVertices, sectionVertices, sectionIndices, sectionWireframeIndices);
 	
 	// 更新缓存数据
 	sectionVAO.bind();
@@ -1031,15 +1078,15 @@ void OpenGLWindow::genIsosurface(float value)
 	isosurfaceIndices.clear();
 	for (const auto& quad : quads)
 	{
-		if (GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i0].position) &&
-			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i1].position) &&
-			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i2].position))
+		if (GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i0].position) &&
+			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i1].position) &&
+			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i2].position))
 		{
 			isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i1, (uint32_t)quad.i2});
 		}
-		if (GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i0].position) &&
-			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i2].position) &&
-			GeoUtil::inZones(zones, bvhRoot, isosurfaceVertices[quad.i3].position))
+		if (GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i0].position) &&
+			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i2].position) &&
+			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i3].position))
 		{
 			isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i2, (uint32_t)quad.i3 });
 		}
@@ -1061,6 +1108,32 @@ void OpenGLWindow::genIsosurface(float value)
 
 	qint64 uploadTime = profileTimer.restart();
 	//qDebug() << "upload isosurface buffer time:" << uploadTime;
+}
+
+void OpenGLWindow::genIsolines(float value)
+{
+	// 计算等值线
+	QVector<ClipLine> clipLines = GeoUtil::genIsolines(mesh, nodeVertices, value, faceBVHRoot);
+	qint64 findIsolinesTime = profileTimer.restart();
+	qDebug() << "find isolines time:" << findIsolinesTime;
+
+	isolineVertices.clear();
+	for (const ClipLine& clipLine : clipLines)
+	{
+		const QList<QVector3D>& vertices = clipLine.vertices;
+		for (int i = 0; i < vertices.count() - 1; ++i)
+		{
+			isolineVertices.append({ NodeVertex{vertices[i], value}, NodeVertex{vertices[i + 1], value} });
+		}
+	}
+
+	// 更新缓存数据
+	qDebug() << isolineVertices.count();
+	isolineVBO.bind();
+	int count = isolineVertices.count() * sizeof(NodeVertex);
+	void* dst = isolineVBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
+	memcpy(dst, (void*)isolineVertices.constData(), count);
+	isolineVBO.unmap();
 }
 
 void OpenGLWindow::bindPointShaderProgram()

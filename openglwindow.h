@@ -44,6 +44,7 @@ private:
 
     void clipZones();
     void genIsosurface(float value);
+	void genIsolines(float value);
 
     void bindPointShaderProgram();
     void bindWireframeShaderProgram();
@@ -58,7 +59,8 @@ private:
     QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
-	BVHTreeNode* bvhRoot;
+	BVHTreeNode* zoneBVHRoot;
+    BVHTreeNode* faceBVHRoot;
 	UniformGrids uniformGrids;
 
     QOpenGLShaderProgram* pointShaderProgram;
@@ -97,6 +99,10 @@ private:
 	QOpenGLBuffer isosurfaceIBO;
 	QVector<NodeVertex> isosurfaceVertices;
 	QVector<uint32_t> isosurfaceIndices;
+
+	QOpenGLBuffer isolineVBO;
+	QOpenGLVertexArrayObject isolineVAO;
+	QVector<NodeVertex> isolineVertices;
 
 	QOpenGLBuffer objVBO;
 	QOpenGLVertexArrayObject objVAO;

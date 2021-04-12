@@ -62,9 +62,15 @@ struct Mesh
 	QVector<Face> faces;
 };
 
+struct ClipLine
+{
+	QList<QVector3D> vertices;
+};
+
 struct BVHTreeNode
 {
 	QVector<uint32_t> zones;
+	QVector<uint32_t> faces;
 
 	Bound bound;
 	BVHTreeNode* children[2] = { nullptr, nullptr };
@@ -233,6 +239,32 @@ inline QVector3D qMaxVec3(const QVector3D& lhs, const QVector3D& rhs)
 		qMax(lhs[1], rhs[1]),
 		qMax(lhs[2], rhs[2])
 	);
+}
+
+inline float qMax3(float a, float b, float c)
+{
+	if (a > b && a > c)
+	{
+		return a;
+	}
+	if (b > a && b > c)
+	{
+		return b;
+	}
+	return c;
+}
+
+inline float qMin3(float a, float b, float c)
+{
+	if (a < b && a < c)
+	{
+		return a;
+	}
+	if (b < a && b < c)
+	{
+		return b;
+	}
+	return c;
 }
 
 template <typename T>
