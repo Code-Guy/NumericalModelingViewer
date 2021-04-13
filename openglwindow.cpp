@@ -16,12 +16,13 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
 	// 加载数据
-	loadDatabase();
-	//loadDataFiles();
+	//loadDatabase();
+	loadDataFiles();
 	preprocess();
 
 	// 初始化摄像机
-	camera = new Camera(QVector3D(943.8f, 926.5f, 969.5f), 237.0f, -36.0f, 240.0f, 0.1f);
+	camera = new Camera(QVector3D(405.5f, 754.4f, 1016.7f), 237.0f, -27.7f, 240.0f, 0.1f);
+	//camera = new Camera(QVector3D(943.8f, 926.5f, 969.5f), 237.0f, -36.0f, 240.0f, 0.1f);
 	//camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
 	//camera = new Camera(QVector3D(387.4f, 57.1f, 267.4f), 226.7f, -26.0f, -31.5f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
@@ -379,7 +380,7 @@ void OpenGLWindow::paintGL()
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	pointShaderProgram->bind();
 	pointShaderProgram->setUniformValue("mvp", cmvp);
@@ -391,7 +392,7 @@ void OpenGLWindow::paintGL()
 	pointShaderProgram->setUniformValue("mvp", rmvp);
 
 	isolineVAO.bind();
-	glDrawArrays(GL_LINES, 0, isolineVertices.count());
+	//glDrawArrays(GL_LINES, 0, isolineVertices.count());
 
 	//pointVAO.bind();
 	//glDrawArrays(GL_POINTS, 0, uniformGrids.points.count());
@@ -727,9 +728,9 @@ void OpenGLWindow::loadDataFiles()
             in >> index;
             index -= 1;
 
-            in >> nodeVertices[index].totalDeformation >>
-				nodeVertices[index].deformation[0] >>
-				nodeVertices[index].deformation[1];
+            in >> nodeVertices[index].deformation[0] >>
+				nodeVertices[index].deformation[1] >>
+				nodeVertices[index].totalDeformation;
 
 			valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, nodeVertices[index].totalDeformation);
 			valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, nodeVertices[index].totalDeformation);
@@ -1115,7 +1116,7 @@ void OpenGLWindow::genIsolines(float value)
 	// 计算等值线
 	QVector<ClipLine> clipLines = GeoUtil::genIsolines(mesh, nodeVertices, value, faceBVHRoot);
 	qint64 findIsolinesTime = profileTimer.restart();
-	qDebug() << "find isolines time:" << findIsolinesTime;
+	//qDebug() << "find isolines time:" << findIsolinesTime;
 
 	isolineVertices.clear();
 	for (const ClipLine& clipLine : clipLines)
@@ -1128,7 +1129,7 @@ void OpenGLWindow::genIsolines(float value)
 	}
 
 	// 更新缓存数据
-	qDebug() << isolineVertices.count();
+	//qDebug() << isolineVertices.count();
 	isolineVBO.bind();
 	int count = isolineVertices.count() * sizeof(NodeVertex);
 	void* dst = isolineVBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
