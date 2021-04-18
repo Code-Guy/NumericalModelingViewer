@@ -44,7 +44,7 @@ private:
 
     void clipZones();
     void genIsosurface(float value);
-	void genIsolines(float value);
+	void genIsolines(float value, float interval, int num);
 
     void bindPointShaderProgram();
     void bindWireframeShaderProgram();

@@ -16,13 +16,13 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
 	// 加载数据
-	//loadDatabase();
-	loadDataFiles();
+	loadDatabase();
+	//loadDataFiles();
 	preprocess();
 
 	// 初始化摄像机
-	camera = new Camera(QVector3D(405.5f, 754.4f, 1016.7f), 237.0f, -27.7f, 240.0f, 0.1f);
-	//camera = new Camera(QVector3D(943.8f, 926.5f, 969.5f), 237.0f, -36.0f, 240.0f, 0.1f);
+	//camera = new Camera(QVector3D(405.5f, 754.4f, 1016.7f), 237.0f, -27.7f, 240.0f, 0.1f);
+	camera = new Camera(QVector3D(943.8f, 926.5f, 969.5f), 237.0f, -36.0f, 240.0f, 0.1f);
 	//camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
 	//camera = new Camera(QVector3D(387.4f, 57.1f, 267.4f), 226.7f, -26.0f, -31.5f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
@@ -259,7 +259,7 @@ void OpenGLWindow::initializeGL()
 
 	// 创建等值线相关渲染资源
 	{
-		const int kMaxIsolineVertexNum = 5000;
+		const int kMaxIsolineVertexNum = 50000;
 		isolineVertices.resize(kMaxIsolineVertexNum);
 
 		isolineVAO.create();
@@ -325,11 +325,12 @@ void OpenGLWindow::paintGL()
 	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
 	plane.normal = QVector3D(sinGlobalTime, sinGlobalTime, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	clipZones();
+	//clipZones();
 	float isoValue = qMapClampRange(sinGlobalTime, -1.0f, 1.0f, valueRange.minTotalDeformation, valueRange.maxTotalDeformation);
+	float interval = (valueRange.maxTotalDeformation - valueRange.minTotalDeformation) / 20.0f;
 	//isoValue = 0.02f;
-	genIsosurface(isoValue);
-	genIsolines(isoValue);
+	//genIsosurface(isoValue);
+	genIsolines(isoValue, interval, 5);
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -355,11 +356,11 @@ void OpenGLWindow::paintGL()
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", false);
-	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionWireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	shadedShaderProgram->bind();
 	shadedShaderProgram->setUniformValue("mvp", lmvp);
@@ -369,30 +370,30 @@ void OpenGLWindow::paintGL()
 
 	zoneVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", false);
-	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	wireframeShaderProgram->bind();
 	wireframeShaderProgram->setUniformValue("mvp", cmvp);
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	pointShaderProgram->bind();
 	pointShaderProgram->setUniformValue("mvp", cmvp);
 
 	isosurfaceVAO.bind();
-	glDrawElements(GL_TRIANGLES, isosurfaceIndices.count(), GL_UNSIGNED_INT, nullptr);
+	//glDrawElements(GL_TRIANGLES, isosurfaceIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	pointShaderProgram->bind();
-	pointShaderProgram->setUniformValue("mvp", rmvp);
+	pointShaderProgram->setUniformValue("mvp", cmvp);
 
 	isolineVAO.bind();
-	//glDrawArrays(GL_LINES, 0, isolineVertices.count());
+	glDrawArrays(GL_LINES, 0, isolineVertices.count());
 
 	//pointVAO.bind();
 	//glDrawArrays(GL_POINTS, 0, uniformGrids.points.count());
@@ -1111,25 +1112,27 @@ void OpenGLWindow::genIsosurface(float value)
 	//qDebug() << "upload isosurface buffer time:" << uploadTime;
 }
 
-void OpenGLWindow::genIsolines(float value)
+void OpenGLWindow::genIsolines(float value, float interval, int num)
 {
 	// 计算等值线
-	QVector<ClipLine> clipLines = GeoUtil::genIsolines(mesh, nodeVertices, value, faceBVHRoot);
-	qint64 findIsolinesTime = profileTimer.restart();
-	//qDebug() << "find isolines time:" << findIsolinesTime;
-
 	isolineVertices.clear();
-	for (const ClipLine& clipLine : clipLines)
+	for (int i = 0; i < num; ++i)
 	{
-		const QList<QVector3D>& vertices = clipLine.vertices;
-		for (int i = 0; i < vertices.count() - 1; ++i)
+		float currentValue = value + interval * i;
+		QVector<ClipLine> clipLines;
+		clipLines = GeoUtil::genIsolines(mesh, nodeVertices, currentValue, faceBVHRoot);
+
+		for (const ClipLine& clipLine : clipLines)
 		{
-			isolineVertices.append({ NodeVertex{vertices[i], value}, NodeVertex{vertices[i + 1], value} });
+			const QList<QVector3D>& vertices = clipLine.vertices;
+			for (int i = 0; i < vertices.count() - 1; ++i)
+			{
+				isolineVertices.append({ NodeVertex{vertices[i], currentValue}, NodeVertex{vertices[i + 1], currentValue} });
+			}
 		}
 	}
 
 	// 更新缓存数据
-	//qDebug() << isolineVertices.count();
 	isolineVBO.bind();
 	int count = isolineVertices.count() * sizeof(NodeVertex);
 	void* dst = isolineVBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
