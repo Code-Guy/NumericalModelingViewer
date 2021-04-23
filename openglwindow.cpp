@@ -21,8 +21,9 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	preprocess();
 
 	// ³õÊ¼»¯ÉãÏñ»ú
+	camera = new Camera(QVector3D(991.0f, 770.5f, 1452.6f), 246.6f, -24.3f, 240.0f, 0.1f);
 	//camera = new Camera(QVector3D(405.5f, 754.4f, 1016.7f), 237.0f, -27.7f, 240.0f, 0.1f);
-	camera = new Camera(QVector3D(943.8f, 926.5f, 969.5f), 237.0f, -36.0f, 240.0f, 0.1f);
+	//camera = new Camera(QVector3D(943.8f, 926.5f, 969.5f), 237.0f, -36.0f, 240.0f, 0.1f);
 	//camera = new Camera(QVector3D(455.0f, 566.0f, 555.0f), 236.0f, -37.0f, 200.0f, 0.1f);
 	//camera = new Camera(QVector3D(387.4f, 57.1f, 267.4f), 226.7f, -26.0f, -31.5f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
@@ -325,12 +326,12 @@ void OpenGLWindow::paintGL()
 	plane.origin = QVector3D(0.0f, 0.0f, 0.0f);
 	plane.normal = QVector3D(sinGlobalTime, sinGlobalTime, -1.0f).normalized();
 	plane.dist = QVector3D::dotProduct(plane.origin, plane.normal);
-	//clipZones();
+	clipZones();
 	float isoValue = qMapClampRange(sinGlobalTime, -1.0f, 1.0f, valueRange.minTotalDeformation, valueRange.maxTotalDeformation);
 	float interval = (valueRange.maxTotalDeformation - valueRange.minTotalDeformation) / 20.0f;
 	//isoValue = 0.02f;
-	//genIsosurface(isoValue);
-	genIsolines(isoValue, interval, 5);
+	genIsosurface(isoValue);
+	genIsolines(isoValue, interval, 1);
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -356,11 +357,11 @@ void OpenGLWindow::paintGL()
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", false);
-	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionWireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	shadedShaderProgram->bind();
 	shadedShaderProgram->setUniformValue("mvp", lmvp);
@@ -370,11 +371,11 @@ void OpenGLWindow::paintGL()
 
 	zoneVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", false);
-	//glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	sectionVAO.bind();
 	shadedShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	wireframeShaderProgram->bind();
 	wireframeShaderProgram->setUniformValue("mvp", cmvp);
@@ -387,10 +388,10 @@ void OpenGLWindow::paintGL()
 	pointShaderProgram->setUniformValue("mvp", cmvp);
 
 	isosurfaceVAO.bind();
-	//glDrawElements(GL_TRIANGLES, isosurfaceIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_TRIANGLES, isosurfaceIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	pointShaderProgram->bind();
-	pointShaderProgram->setUniformValue("mvp", cmvp);
+	pointShaderProgram->setUniformValue("mvp", rmvp);
 
 	isolineVAO.bind();
 	glDrawArrays(GL_LINES, 0, isolineVertices.count());
