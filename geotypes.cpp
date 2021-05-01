@@ -103,6 +103,16 @@ void Bound::reset()
 	intersectFlag = -1;
 }
 
+bool Zone::isValid() const
+{
+	QSet<uint32_t> vertexSet;
+	for (int i = 0; i < vertexNum; ++i)
+	{
+		vertexSet.insert(vertices[i]);
+	}
+	return vertexSet.count() > 3;
+}
+
 // Zone类成员函数实现
 void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 {

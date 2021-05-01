@@ -535,7 +535,7 @@ bool GeoUtil::inZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVect
 		for (uint32_t z : node->zones)
 		{
 			const Zone& zone = zones[z];
-			if (zone.bound.contain(point))
+			if (zone.contain(point))
 			{
 				return true;
 			}

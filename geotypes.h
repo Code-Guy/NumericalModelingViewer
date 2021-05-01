@@ -150,6 +150,7 @@ struct Zone
 	QMatrix4x4 invertedBasisMatrix;
 	QVector<Plane> planes;
 	QVector3D origin;
+	bool isValid() const;
 	void cache(const QVector<NodeVertex>& nodeVertices);
 	bool contain(const QVector3D& point) const;
 	bool interp(const QVector3D& point, float& value) const;

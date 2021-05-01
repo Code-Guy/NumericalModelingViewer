@@ -382,7 +382,7 @@ void OpenGLWindow::paintGL()
 
 	wireframeVAO.bind();
 	wireframeShaderProgram->setUniformValue("skipClip", true);
-	//glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+	glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 	pointShaderProgram->bind();
 	pointShaderProgram->setUniformValue("mvp", cmvp);
@@ -561,16 +561,16 @@ bool OpenGLWindow::loadDatabase()
 	}
 
 	// 查询网格单元包含的线条信息，每个线条通过两个点索引表征
-	query.exec("SELECT * FROM ELEMEDGES");
-	record = query.record();
-	while (query.next())
-	{
-		int num = query.value(2).toInt() * 2;
-		for (int i = 0; i < num; ++i)
-		{
-			wireframeIndices.append(query.value(i + 3).toInt() - 1);
-		}
-	}
+	//query.exec("SELECT * FROM ELEMEDGES");
+	//record = query.record();
+	//while (query.next())
+	//{
+	//	int num = query.value(2).toInt() * 2;
+	//	for (int i = 0; i < num; ++i)
+	//	{
+	//		wireframeIndices.append(query.value(i + 3).toInt() - 1);
+	//	}
+	//}
 
 	// 查询模型所有表面对应的节点索引信息
 	//query.exec("SELECT * FROM FACETS");
@@ -797,9 +797,6 @@ void OpenGLWindow::addFacet(Facet& facet)
 	if (facet.num == 3)
 	{
 		indices.append({ facet.indices[0], facet.indices[1], facet.indices[2] });
-		wireframeIndices.append({ facet.indices[0], facet.indices[1],
-			facet.indices[0], facet.indices[2],
-			facet.indices[1], facet.indices[2] });
 	}
 	else if (facet.num == 4)
 	{
@@ -807,10 +804,6 @@ void OpenGLWindow::addFacet(Facet& facet)
 			facet.indices[0], facet.indices[1], facet.indices[2],
 			facet.indices[0], facet.indices[2], facet.indices[3]
 			});
-		wireframeIndices.append({ facet.indices[0], facet.indices[1],
-			facet.indices[1], facet.indices[2],
-			facet.indices[2], facet.indices[3],
-			facet.indices[3], facet.indices[0] });
 	}
 
 	facetIndices.append(indices);
@@ -826,6 +819,12 @@ void OpenGLWindow::addFacet(Facet& facet)
 
 void OpenGLWindow::addZone(Zone& zone)
 {
+	if (!zone.isValid())
+	{
+		qDebug() << "Invalid zone!";
+		return;
+	}
+
 	for (int i = 0; i < zone.vertexNum; ++i)
 	{
 		zone.bound.combine(nodeVertices[zone.vertices[i]].position);
@@ -926,6 +925,11 @@ void OpenGLWindow::addZone(Zone& zone)
 		zone.edges[9] = zone.vertices[3];
 		zone.edges[10] = zone.vertices[2];
 		zone.edges[11] = zone.vertices[3];
+	}
+
+	for (int i = 0; i < zone.edgeNum * 2; ++i)
+	{
+		wireframeIndices.append(zone.edges[i]);
 	}
 
 	zone.cache(nodeVertices);
