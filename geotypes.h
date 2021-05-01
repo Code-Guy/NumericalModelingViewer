@@ -18,6 +18,11 @@ struct Plane
 	QVector3D origin;
 	QVector3D normal;
 	float dist;
+	bool degenerated = false;
+
+	Plane() {}
+	Plane(const QVector3D& v0, const QVector3D& v1, const QVector3D& v2);
+	bool checkSide(const QVector3D& point) const;
 };
 
 struct Bound
@@ -38,8 +43,6 @@ struct Bound
 	bool contain(const QVector3D& point) const;
 	void cache();
 	void reset();
-
-	bool calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon = 0.001f);
 };
 
 struct Edge
@@ -144,10 +147,11 @@ struct Zone
 	bool visited = false;
 
 	float values[8];
-	QVector3D axis[3];
-	//QVector3D coords[8];
+	QMatrix4x4 invertedBasisMatrix;
+	QVector<Plane> planes;
 	QVector3D origin;
 	void cache(const QVector<NodeVertex>& nodeVertices);
+	bool contain(const QVector3D& point) const;
 	bool interp(const QVector3D& point, float& value) const;
 };
 
@@ -313,6 +317,7 @@ T qMapClampRange(const T& value, const T& fromMin, const T& fromMax, const T& to
 
 int qMaxDim(const QVector3D& v);
 float qMaxDimVal(const QVector3D& v);
+bool qIsNearlyZero(const QVector3D& v0, float epsilon = 0.001f);
 bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon = 0.001f);
 float qManhattaDistance(const QVector3D& v0, const QVector3D& v1);
 QVector3D qToVec3(const std::array<double, 3>& arr3);

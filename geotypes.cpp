@@ -1,5 +1,25 @@
 #include "geotypes.h"
 
+Plane::Plane(const QVector3D& v0, const QVector3D& v1, const QVector3D& v2)
+{
+	origin = v0;
+	QVector3D v01 = v1 - v0;
+	QVector3D v02 = v2 - v0;
+	if (qIsNearlyZero(v01) || qIsNearlyZero(v02) || qIsNearlyEqual(v01, v02))
+	{
+		degenerated = true;
+		return;
+	}
+
+	normal = QVector3D::crossProduct(v01, v02).normalized();
+	dist = QVector3D::dotProduct(origin, normal);
+}
+
+bool Plane::checkSide(const QVector3D& point) const
+{
+	return QVector3D::dotProduct(point, normal) > dist;
+}
+
 QVector3D Bound::size() const
 {
 	return max - min;
@@ -43,10 +63,10 @@ bool Bound::intersect(const Plane& plane)
 		return intersectFlag;
 	}
 
-	bool first = calcPointPlaneSide(corners[0], plane);
+	bool first = plane.checkSide(corners[0]);
 	for (int i = 1; i < 8; i++)
 	{
-		bool other = calcPointPlaneSide(corners[i], plane);
+		bool other = plane.checkSide(corners[i]);
 		if (other != first)
 		{
 			intersectFlag = 1;
@@ -83,14 +103,10 @@ void Bound::reset()
 	intersectFlag = -1;
 }
 
-bool Bound::calcPointPlaneSide(const QVector3D& point, const Plane& plane, float epsilon)
-{
-	return QVector3D::dotProduct(point, plane.normal) > plane.dist;
-}
-
 // Zone类成员函数实现
 void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 {
+	// 记录单元每个点的数值
 	for (int i = 0; i < vertexNum; ++i)
 	{
 		values[i] = nodeVertices[vertices[i]].totalDeformation;
@@ -114,30 +130,73 @@ void Zone::cache(const QVector<NodeVertex>& nodeVertices)
 		values[5] = values[6] = values[7] = values[3];
 	}
 
+	// 记录单元的每个面
+	if (type == Brick || type == DegeneratedBrick)
+	{
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[2]].position, nodeVertices[vertices[1]].position));
+		planes.append(Plane(nodeVertices[vertices[3]].position, nodeVertices[vertices[6]].position, nodeVertices[vertices[5]].position));
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[3]].position, nodeVertices[vertices[2]].position));
+		planes.append(Plane(nodeVertices[vertices[1]].position, nodeVertices[vertices[4]].position, nodeVertices[vertices[6]].position));
+		planes.append(Plane(nodeVertices[vertices[2]].position, nodeVertices[vertices[5]].position, nodeVertices[vertices[4]].position));
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[1]].position, nodeVertices[vertices[3]].position));
+	}
+	else if (type == Wedge || type == Pyramid)
+	{
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[2]].position, nodeVertices[vertices[1]].position));
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[3]].position, nodeVertices[vertices[2]].position));
+		planes.append(Plane(nodeVertices[vertices[1]].position, nodeVertices[vertices[4]].position, nodeVertices[vertices[6]].position));
+		planes.append(Plane(nodeVertices[vertices[2]].position, nodeVertices[vertices[5]].position, nodeVertices[vertices[4]].position));
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[1]].position, nodeVertices[vertices[3]].position));
+	}
+	else if (type == Tetrahedron)
+	{
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[2]].position, nodeVertices[vertices[1]].position));
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[3]].position, nodeVertices[vertices[2]].position));
+		planes.append(Plane(nodeVertices[vertices[1]].position, nodeVertices[vertices[4]].position, nodeVertices[vertices[6]].position));
+		planes.append(Plane(nodeVertices[vertices[0]].position, nodeVertices[vertices[1]].position, nodeVertices[vertices[3]].position));
+	}
+
+	// 记录单元的基向量
 	origin = nodeVertices[vertices[0]].position;
+	QVector3D axis[3];
 	for (int i = 0; i < 3; ++i)
 	{
-		QVector3D rawAxis = nodeVertices[vertices[i + 1]].position - origin;
-		axis[i] = QVector3D(0.0f, 0.0f, 0.0f);
-		int maxDim = qMaxDim(rawAxis);
-		axis[i][maxDim] = rawAxis[maxDim];
+		axis[i] = nodeVertices[vertices[i + 1]].position - origin;
 	}
+	QMatrix4x4 basisMatrix(axis[0][0], axis[1][0], axis[2][0], 0.0f,
+		axis[0][1], axis[1][1], axis[2][1], 0.0f,
+		axis[0][2], axis[1][2], axis[2][2], 0.0f,
+		0.0f, 0.0f, 0.0f, 1.0f);
+	bool invertible = false;
+	invertedBasisMatrix = basisMatrix.inverted(&invertible);
+	if (!invertible)
+	{
+		qDebug() << "Invertible!";
+	}
+}
+
+bool Zone::contain(const QVector3D& point) const
+{
+	bool first = planes[0].checkSide(point);
+	for (int i = 1; i < planes.count(); ++i)
+	{
+		bool other = planes[i].checkSide(point);
+		if (other != first)
+		{
+			return false;
+		}
+	}
+	return true;
 }
 
 bool Zone::interp(const QVector3D& point, float& value) const
 {
-	if (!bound.contain(point))
+	if (!contain(point))
 	{
 		return false;
 	}
 
-	float t[3];
-	QVector3D originToPoint = point - origin;
-	for (int i = 0; i < 3; ++i)
-	{
-		t[i] = QVector3D::dotProduct(originToPoint, axis[i]) / axis[i].lengthSquared();
-	}
-
+	QVector4D t = invertedBasisMatrix * QVector4D(point - origin, 0.0f);
 	value = qTriLerp(values[0], values[1], values[2], values[4],
 		values[3], values[6], values[5], values[7],
 		t[0], t[1], t[2]);
@@ -160,6 +219,11 @@ int qMaxDim(const QVector3D& v)
 float qMaxDimVal(const QVector3D& v)
 {
 	return v[qMaxDim(v)];
+}
+
+bool qIsNearlyZero(const QVector3D& v0, float epsilon /*= 0.001f*/)
+{
+	return qIsNearlyEqual(v0, QVector3D(0.0f, 0.0f, 0.0f), epsilon);
 }
 
 bool qIsNearlyEqual(const QVector3D& v0, const QVector3D& v1, float epsilon /*= 0.001f*/)

@@ -1081,18 +1081,8 @@ void OpenGLWindow::genIsosurface(float value)
 	isosurfaceIndices.clear();
 	for (const auto& quad : quads)
 	{
-		if (GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i0].position) &&
-			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i1].position) &&
-			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i2].position))
-		{
-			isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i1, (uint32_t)quad.i2});
-		}
-		if (GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i0].position) &&
-			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i2].position) &&
-			GeoUtil::inZones(zones, zoneBVHRoot, isosurfaceVertices[quad.i3].position))
-		{
-			isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i2, (uint32_t)quad.i3 });
-		}
+		isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i1, (uint32_t)quad.i2 });
+		isosurfaceIndices.append({ (uint32_t)quad.i0, (uint32_t)quad.i2, (uint32_t)quad.i3 });
 	}
 
 	// 更新GPU缓存资源
