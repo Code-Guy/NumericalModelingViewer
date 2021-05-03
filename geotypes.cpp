@@ -15,6 +15,12 @@ Plane::Plane(const QVector3D& v0, const QVector3D& v1, const QVector3D& v2)
 	dist = QVector3D::dotProduct(origin, normal);
 }
 
+void Plane::normalize()
+{
+	normal.normalize();
+	dist = QVector3D::dotProduct(origin, normal);
+}
+
 bool Plane::checkSide(const QVector3D& point) const
 {
 	return QVector3D::dotProduct(point, normal) > dist;

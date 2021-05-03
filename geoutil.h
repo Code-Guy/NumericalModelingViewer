@@ -18,6 +18,7 @@ public:
 
 	static BVHTreeNode* buildBVHTree(const QVector<Zone>& zones);
 	static BVHTreeNode* buildBVHTree(const Mesh& mesh);
+	static void destroyBVHTree(BVHTreeNode* root);
 
 private:
 	static void fixWindingOrder(Mesh& mesh, const Face& mainFace, Face& neighborFace);

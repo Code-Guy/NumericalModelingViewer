@@ -7,6 +7,8 @@
 #include <QMap>
 #include <array>
 
+#define SAFE_DELETE(p) { if(p) { delete (p); (p)=NULL; } }
+
 const float kMaxVal = 1e8f;
 const float kMinVal = -kMaxVal;
 const uint32_t kInvalidIndex = 1e8;
@@ -22,6 +24,7 @@ struct Plane
 
 	Plane() {}
 	Plane(const QVector3D& v0, const QVector3D& v1, const QVector3D& v2);
+	void normalize();
 	bool checkSide(const QVector3D& point) const;
 };
 

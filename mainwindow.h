@@ -17,8 +17,30 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+public slots:
+	void onDisplayModeComboBoxCurrentIndexChanged(int index);
+
+	void onPlaneOriginXLineEditTextChanged(const QString& text);
+	void onPlaneOriginYLineEditTextChanged(const QString& text);
+	void onPlaneOriginZLineEditTextChanged(const QString& text);
+	void onPlaneNormalXLineEditTextChanged(const QString& text);
+	void onPlaneNormalYLineEditTextChanged(const QString& text);
+	void onPlaneNormalZLineEditTextChanged(const QString& text);
+
+	void onIsosurfaceValueChanged(int value);
+	void onIsosurfaceShowWireframeCheckBoxStateChanged(int state);
+
+	void onIsolineValueChanged(int value);
+	void onIsolineShowWireframeCheckBoxStateChanged(int state);
+
 private:
+	void setLayoutVisible(QLayout* layout, bool flag);
+
     Ui::MainWindow *ui;
+
+	QVector<QLayout*> displayModeLayouts;
+	Plane clipPlane;
+	QVector2D isoValueRange;
 };
 
 #endif // MAINWINDOW_H

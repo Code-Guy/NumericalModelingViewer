@@ -15,12 +15,26 @@
 
 #include "geoutil.h"
 
+enum DisplayMode
+{
+    ClipZone, Isosurface, Isoline
+};
+
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
 public:
     OpenGLWindow(QWidget *parent);
     ~OpenGLWindow();
+
+    void setDisplayMode(DisplayMode inDisplayMode);
+    void setClipPlane(const Plane& inClipPlane);
+	void setIsosurfaceValue(float inIsosurfaceValue);
+	void setShowIsosurfaceWireframe(bool flag);
+	void setIsolineValue(float inIsolineValue);
+    void setShowIsolineWireframe(bool flag);
+
+    QVector2D getIsoValueRange();
 
 protected:
     void paintGL() override;
@@ -42,9 +56,9 @@ private:
 	void preprocess();
     void interpUniformGrids();
 
-    void clipZones();
+    void clipZones(const Plane& plane);
     void genIsosurface(float value);
-	void genIsolines(float value, float interval, int num);
+	void genIsolines(float value);
 
     void bindPointShaderProgram();
     void bindWireframeShaderProgram();
@@ -55,7 +69,6 @@ private:
 
 	Mesh mesh;
 	Mesh objMesh;
-	Plane plane;
     QVector<Zone> zones;
     ValueRange valueRange;
 	QVector<int> zoneTypes;
@@ -114,6 +127,13 @@ private:
     QElapsedTimer deltaElapsedTimer;
     QElapsedTimer globalElapsedTimer;
     QElapsedTimer profileTimer;
+
+    DisplayMode displayMode;
+    Plane clipPlane;
+    float isosurfaceValue;
+    bool showIsosurfaceWireframe;
+    float isolineValue;
+    bool showIsolineWireframe;
 };
 
 #endif // OPENGLWINDOW_H

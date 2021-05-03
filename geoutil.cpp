@@ -703,6 +703,16 @@ BVHTreeNode* GeoUtil::buildBVHTree(const QVector<Zone>& zones, QVector<uint32_t>
 	return node;
 }
 
+void GeoUtil::destroyBVHTree(BVHTreeNode* root)
+{
+	if (root)
+	{
+		destroyBVHTree(root->children[0]);
+		destroyBVHTree(root->children[1]);
+		SAFE_DELETE(root);
+	}
+}
+
 void GeoUtil::resetBVHTree(BVHTreeNode* node)
 {
 	if (!node)
