@@ -66,6 +66,13 @@ struct Mesh
 	QVector<QVector3D> vertices;
 	QMap<Edge, QVector<uint32_t>> edges;
 	QVector<Face> faces;
+
+	void clear()
+	{
+		vertices.clear();
+		edges.clear();
+		faces.clear();
+	}
 };
 
 struct ClipLine
@@ -100,32 +107,62 @@ struct NodeVertex
 
 struct ValueRange
 {
-	float minTotalDeformation = kMaxVal;
-	float maxTotalDeformation = kMinVal;
+	float minTotalDeformation;
+	float maxTotalDeformation;
 
-	QVector3D minDeformation = kMaxVec3;
-	QVector3D maxDeformation = kMinVec3;
+	QVector3D minDeformation;
+	QVector3D maxDeformation;
 
-	QVector3D minNormalElasticStrain = kMaxVec3;
-	QVector3D maxNormalElasticStrain = kMinVec3;
+	QVector3D minNormalElasticStrain;
+	QVector3D maxNormalElasticStrain;
 
-	QVector3D minShearElasticStrain = kMaxVec3;
-	QVector3D maxShearElasticStrain = kMinVec3;
+	QVector3D minShearElasticStrain;
+	QVector3D maxShearElasticStrain;
 
-	float minMaximumPrincipalStress = kMaxVal;
-	float maxMaximumPrincipalStress = kMinVal;
+	float minMaximumPrincipalStress;
+	float maxMaximumPrincipalStress;
 
-	float minMiddlePrincipalStress = kMaxVal;
-	float maxMiddlePrincipalStress = kMinVal;
+	float minMiddlePrincipalStress;
+	float maxMiddlePrincipalStress;
 
-	float minMinimumPrincipalStress = kMaxVal;
-	float maxMinimumPrincipalStress = kMinVal;
+	float minMinimumPrincipalStress;
+	float maxMinimumPrincipalStress;
 
-	QVector3D minNormalStress = kMaxVec3;
-	QVector3D maxNormalStress = kMinVec3;
+	QVector3D minNormalStress;
+	QVector3D maxNormalStress;
 
-	QVector3D minShearStress = kMaxVec3;
-	QVector3D maxShearStress = kMinVec3;
+	QVector3D minShearStress;
+	QVector3D maxShearStress;
+
+	void reset()
+	{
+		minTotalDeformation = kMaxVal;
+		maxTotalDeformation = kMinVal;
+
+		minDeformation = kMaxVec3;
+		maxDeformation = kMinVec3;
+
+		minNormalElasticStrain = kMaxVec3;
+		maxNormalElasticStrain = kMinVec3;
+
+		minShearElasticStrain = kMaxVec3;
+		maxShearElasticStrain = kMinVec3;
+
+		minMaximumPrincipalStress = kMaxVal;
+		maxMaximumPrincipalStress = kMinVal;
+
+		minMiddlePrincipalStress = kMaxVal;
+		maxMiddlePrincipalStress = kMinVal;
+
+		minMinimumPrincipalStress = kMaxVal;
+		maxMinimumPrincipalStress = kMinVal;
+
+		minNormalStress = kMaxVec3;
+		maxNormalStress = kMinVec3;
+
+		minShearStress = kMaxVec3;
+		maxShearStress = kMinVec3;
+	}
 };
 
 enum ZoneType
@@ -172,6 +209,12 @@ struct UniformGrids
 	Bound bound;
 	QVector<NodeVertex> points;
 	QVector<float> voxelData;
+
+	void clear()
+	{
+		points.clear();
+		voxelData.clear();
+	}
 };
 
 // Edge操作符重载和哈希函数

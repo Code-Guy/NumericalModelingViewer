@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include <QFileDialog>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -12,20 +13,11 @@ MainWindow::MainWindow(QWidget *parent) :
     displayModeLayouts.append(ui->isolineHorizontalLayout);
     onDisplayModeComboBoxCurrentIndexChanged(ui->displayModeComboBox->currentIndex());
 
-	clipPlane.origin = QVector3D(0.0f, 0.0f, 100.0f);
-	clipPlane.normal = QVector3D(0.0f, -2.0f, -1.0f);
-    isoValueRange = ui->openGLWidget->getIsoValueRange();
-    
-    // 初始化界面数值
-    ui->planeOriginXLineEdit->setText(QString::number(clipPlane.origin.x()));
-    ui->planeOriginYLineEdit->setText(QString::number(clipPlane.origin.y()));
-    ui->planeOriginZLineEdit->setText(QString::number(clipPlane.origin.z()));
-	ui->planeNormalXLineEdit->setText(QString::number(clipPlane.normal.x()));
-	ui->planeNormalYLineEdit->setText(QString::number(clipPlane.normal.y()));
-	ui->planeNormalZLineEdit->setText(QString::number(clipPlane.normal.z()));
+    connect(ui->openGLWidget, SIGNAL(onModelStartLoad()), this, SLOT(onModelStartLoad()));
+    connect(ui->openGLWidget, SIGNAL(onModelFinishLoad()), this, SLOT(onModelFinishLoad()));
 
-    ui->isosurfaceValueSlider->setValue(70);
-    ui->isolineValueSlider->setValue(ui->isosurfaceValueSlider->value());
+    connect(ui->openAction, SIGNAL(triggered()), this, SLOT(openFile()));
+    connect(ui->exportAction, SIGNAL(triggered()), this, SLOT(exportToEDB()));
 
     connect(ui->displayModeComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onDisplayModeComboBoxCurrentIndexChanged(int)));
 
@@ -100,7 +92,6 @@ void MainWindow::onIsosurfaceValueChanged(int value)
     ui->openGLWidget->setIsosurfaceValue(qMapClampRange((float)value, 0.0f, 99.0f, isoValueRange[0], isoValueRange[1]));
 }
 
-
 void MainWindow::onIsosurfaceShowWireframeCheckBoxStateChanged(int state)
 {
     ui->openGLWidget->setShowIsosurfaceWireframe(state == Qt::Checked);
@@ -111,10 +102,50 @@ void MainWindow::onIsolineValueChanged(int value)
     ui->openGLWidget->setIsolineValue(qMapClampRange((float)value, 0.0f, 99.0f, isoValueRange[0], isoValueRange[1]));
 }
 
-
 void MainWindow::onIsolineShowWireframeCheckBoxStateChanged(int state)
 {
 	ui->openGLWidget->setShowIsolineWireframe(state == Qt::Checked);
+}
+
+void MainWindow::openFile()
+{
+	QString fileName = QFileDialog::getOpenFileName(this, QStringLiteral("打开"), "asset/data/", tr("Database file(*.edb);;f3grid file(*.f3grid)"));
+	if (!fileName.isEmpty())
+	{
+		ui->openGLWidget->openFile(fileName);
+	}
+}
+
+void MainWindow::exportToEDB()
+{
+	QString exportPath = QFileDialog::getSaveFileName(this, QStringLiteral("导出"), "asset/data/export", tr("Database file(*.edb)"));
+	if (!exportPath.isEmpty())
+	{
+		ui->openGLWidget->exportToEDB(exportPath);
+	}
+}
+
+void MainWindow::onModelStartLoad()
+{
+
+}
+
+void MainWindow::onModelFinishLoad()
+{
+	clipPlane.origin = QVector3D(0.0f, 0.0f, 100.0f);
+	clipPlane.normal = QVector3D(0.0f, -2.0f, -1.0f);
+	isoValueRange = ui->openGLWidget->getIsoValueRange();
+
+	// 初始化界面数值
+	ui->planeOriginXLineEdit->setText(QString::number(clipPlane.origin.x()));
+	ui->planeOriginYLineEdit->setText(QString::number(clipPlane.origin.y()));
+	ui->planeOriginZLineEdit->setText(QString::number(clipPlane.origin.z()));
+	ui->planeNormalXLineEdit->setText(QString::number(clipPlane.normal.x()));
+	ui->planeNormalYLineEdit->setText(QString::number(clipPlane.normal.y()));
+	ui->planeNormalZLineEdit->setText(QString::number(clipPlane.normal.z()));
+
+	ui->isosurfaceValueSlider->setValue(70);
+	ui->isolineValueSlider->setValue(ui->isosurfaceValueSlider->value());
 }
 
 void MainWindow::setLayoutVisible(QLayout* layout, bool flag)

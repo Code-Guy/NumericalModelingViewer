@@ -33,6 +33,12 @@ public slots:
 	void onIsolineValueChanged(int value);
 	void onIsolineShowWireframeCheckBoxStateChanged(int state);
 
+	void openFile();
+	void exportToEDB();
+
+	void onModelStartLoad();
+	void onModelFinishLoad();
+
 private:
 	void setLayoutVisible(QLayout* layout, bool flag);
 

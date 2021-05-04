@@ -2,6 +2,7 @@
 #include "camera.h"
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlRecord>
@@ -15,15 +16,13 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	// 设置窗口属性
 	setFocusPolicy(Qt::FocusPolicy::ClickFocus);
 
-	// 加载数据
-	loadDatabase();
-	//loadDataFiles();
-	preprocess();
-
 	// 初始化摄像机
 	camera = new Camera(QVector3D(837.6f, 574.4f, 982.1f), 233.3f, -24.5f, 240.0f, 0.1f);
 	camera->setClipping(0.1f, 10000.0f);
 	camera->setFovy(45.0f);
+
+	zoneBVHRoot = nullptr;
+	faceBVHRoot = nullptr;
 
 	displayMode = ClipZone;
 	showIsosurfaceWireframe = false;
@@ -34,31 +33,12 @@ OpenGLWindow::~OpenGLWindow()
 {
 	makeCurrent();
 
-	GeoUtil::destroyBVHTree(zoneBVHRoot);
-	GeoUtil::destroyBVHTree(faceBVHRoot);
 	delete camera;
-
 	delete pointShaderProgram;
 	delete wireframeShaderProgram;
 	delete shadedShaderProgram;
 
-	nodeVBO.destroy();
-	wireframeVAO.destroy();
-	wireframeIBO.destroy();
-	zoneVAO.destroy();
-	zoneIBO.destroy();
-	facetVAO.destroy();
-	facetIBO.destroy();
-	sectionVAO.destroy();
-	sectionVBO.destroy();
-	sectionIBO.destroy();
-	sectionWireframeVAO.destroy();
-	sectionWireframeIBO.destroy();
-	isolineVAO.destroy();
-	isolineVBO.destroy();
-	objVAO.destroy();
-	objVBO.destroy();
-	objIBO.destroy();
+	cleanResources();
 
 	doneCurrent();
 }
@@ -100,6 +80,46 @@ void OpenGLWindow::setShowIsolineWireframe(bool flag)
 QVector2D OpenGLWindow::getIsoValueRange()
 {
 	return QVector2D(valueRange.minTotalDeformation, valueRange.maxTotalDeformation);
+}
+
+void OpenGLWindow::openFile(const QString& fileName)
+{
+	emit onModelStartLoad();
+	cleanResources();
+
+	QFileInfo fileInfo(fileName);
+	QString suffix = fileInfo.suffix();
+	if (suffix == "edb")
+	{
+		loadDatabase(fileName);
+	}
+	else if (suffix == "f3grid")
+	{
+		loadDataFiles(fileName);
+	}
+	
+	preprocess();
+	initResources();
+
+	// 初始化剖切面
+	clipPlane.origin = QVector3D(0.0f, 0.0f, 100.0f);
+	clipPlane.normal = QVector3D(0.0f, -2.0f, -1.0f);
+	setClipPlane(clipPlane);
+
+	// 初始化等值面/线
+	QVector2D isoValueRange = getIsoValueRange();
+	float isoValue = (isoValueRange[0] + isoValueRange[1]) * 0.7f;
+	setIsosurfaceValue(isoValue);
+	setIsolineValue(isoValue);
+
+	emit onModelFinishLoad();
+}
+
+void OpenGLWindow::exportToEDB(const QString& exportPath)
+{
+	QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+	db.setDatabaseName(exportPath);
+	
 }
 
 void OpenGLWindow::initializeGL()
@@ -161,197 +181,11 @@ void OpenGLWindow::initializeGL()
 		shadedShaderProgram->link();
 	}
 
-	// 创建基础节点顶点缓存对象
-	nodeVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-	nodeVBO.create();
-	nodeVBO.bind();
-	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-	nodeVBO.allocate(nodeVertices.constData(), nodeVertices.count() * sizeof(NodeVertex));
-
-	// 创建点模式相关渲染资源
-	{
-		// create the vertex array object
-		pointVAO.create();
-		pointVAO.bind();
-		pointVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-		pointVBO.create();
-		pointVBO.bind();
-		pointVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		pointVBO.allocate(uniformGrids.points.constData(), uniformGrids.points.count() * sizeof(NodeVertex));
-
-		bindPointShaderProgram();
-	}
-
-	// 创建线框模式相关渲染资源
-	{
-		// create the vertex array object
-		wireframeVAO.create();
-		wireframeVAO.bind();
-		nodeVBO.bind();
-
-		// create the index buffer object
-		wireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		wireframeIBO.create();
-		wireframeIBO.bind();
-		wireframeIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		wireframeIBO.allocate(wireframeIndices.constData(), wireframeIndices.count() * sizeof(uint32_t));
-
-		bindWireframeShaderProgram();
-	}
-
-	// 创建单元模式相关渲染资源
-	{
-		zoneVAO.create();
-		zoneVAO.bind();
-		nodeVBO.bind();
-
-		// create the index buffer object
-		zoneIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		zoneIBO.create();
-		zoneIBO.bind();
-		zoneIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(uint32_t));
-		bindShadedShaderProgram();
-	}
-
-	// 创建Face相关渲染资源
-	{
-		facetVAO.create();
-		facetVAO.bind();
-		nodeVBO.bind();
-
-		// create the index buffer object
-		facetIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		facetIBO.create();
-		facetIBO.bind();
-		facetIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(uint32_t));
-		bindShadedShaderProgram();
-	}
-
-	// 创建截面相关渲染资源
-	{
-		const int kMaxSectionVertexNum = 5000;
-		sectionVertices.resize(kMaxSectionVertexNum);
-		sectionIndices.resize(sectionVertices.count() * 10);
-
-		sectionVAO.create();
-		sectionVAO.bind();
-
-		sectionVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-		sectionVBO.create();
-		sectionVBO.bind();
-		sectionVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
-		sectionVBO.allocate(sectionVertices.constData(), sectionVertices.count() * sizeof(NodeVertex));
-
-		// create the index buffer object
-		sectionIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		sectionIBO.create();
-		sectionIBO.bind();
-		sectionIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
-		sectionIBO.allocate(sectionIndices.constData(), sectionIndices.count() * sizeof(uint32_t));
-		bindShadedShaderProgram();
-		
-		// 初始化截面线框资源
-		sectionWireframeIndices.resize(sectionVertices.count() * 5);
-
-		sectionWireframeVAO.create();
-		sectionWireframeVAO.bind();
-		sectionVBO.bind();
-
-		// create the index buffer object
-		sectionWireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		sectionWireframeIBO.create();
-		sectionWireframeIBO.bind();
-		sectionWireframeIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
-		sectionWireframeIBO.allocate(sectionWireframeIndices.constData(), sectionWireframeIndices.count() * sizeof(uint32_t));
-
-		sectionVertices.clear();
-		sectionIndices.clear();
-		sectionWireframeIndices.clear();
-		bindWireframeShaderProgram();
-	}
-
-	// 创建等值面相关渲染资源
-	{
-		const int kMaxIsosurfaceVertexNum = 30000;
-		isosurfaceVertices.resize(kMaxIsosurfaceVertexNum);
-		isosurfaceIndices.resize(isosurfaceVertices.count() * 10);
-
-		isosurfaceVAO.create();
-		isosurfaceVAO.bind();
-
-		isosurfaceVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-		isosurfaceVBO.create();
-		isosurfaceVBO.bind();
-		isosurfaceVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
-		isosurfaceVBO.allocate(isosurfaceVertices.constData(), isosurfaceVertices.count() * sizeof(NodeVertex));
-
-		// create the index buffer object
-		isosurfaceIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		isosurfaceIBO.create();
-		isosurfaceIBO.bind();
-		isosurfaceIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
-		isosurfaceIBO.allocate(isosurfaceIndices.constData(), isosurfaceIndices.count() * sizeof(uint32_t));
-
-		isosurfaceVertices.clear();
-		isosurfaceIndices.clear();
-		bindPointShaderProgram();
-	}
-
-	// 创建等值线相关渲染资源
-	{
-		const int kMaxIsolineVertexNum = 50000;
-		isolineVertices.resize(kMaxIsolineVertexNum);
-
-		isolineVAO.create();
-		isolineVAO.bind();
-
-		isolineVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-		isolineVBO.create();
-		isolineVBO.bind();
-		isolineVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
-		isolineVBO.allocate(isolineVertices.constData(), isolineVertices.count() * sizeof(NodeVertex));
-
-		isolineVertices.clear();
-		bindPointShaderProgram();
-	}
-
-	// 创建obj模型相关渲染资源
-	{
-		objVAO.create();
-		objVAO.bind();
-
-		objVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
-		objVBO.create();
-		objVBO.bind();
-		objVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::StaticDraw);
-		objVBO.allocate(objMesh.vertices.constData(), objMesh.vertices.count() * sizeof(QVector3D));
-
-		// create the index buffer object
-		objIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
-		objIBO.create();
-		objIBO.bind();
-		objIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
-		objIBO.allocate(objIndices.constData(), objIndices.count() * sizeof(uint32_t));
-	}
-
 	// 初始化计时器
 	deltaElapsedTimer.start();
 	globalElapsedTimer.start();
 	connect(&updateTimer, SIGNAL(timeout()), this, SLOT(update()));
 	updateTimer.start(16);
-
-	// 初始化剖切面
-	clipPlane.origin = QVector3D(0.0f, 0.0f, 100.0f);
-	clipPlane.normal = QVector3D(0.0f, -2.0f, -1.0f);
-	setClipPlane(clipPlane);
-
-	// 初始化等值面/线
-	QVector2D isoValueRange = getIsoValueRange();
-	float isoValue = (isoValueRange[0] + isoValueRange[1]) * 0.7f;
-	setIsosurfaceValue(isoValue);
-	setIsolineValue(isoValue);
 }
 
 void OpenGLWindow::resizeGL(int w, int h)
@@ -373,6 +207,11 @@ void OpenGLWindow::paintGL()
 
 	glClearColor(0.7, 0.7, 0.7, 1.0);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	if (zones.empty())
+	{
+		return;
+	}
 
 	QMatrix4x4 m;
 	m.setToIdentity();
@@ -479,10 +318,10 @@ void OpenGLWindow::keyReleaseEvent(QKeyEvent* event)
 	camera->onKeyReleased(event->key());
 }
 
-bool OpenGLWindow::loadDatabase()
+bool OpenGLWindow::loadDatabase(const QString& fileName)
 {
 	QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
-	db.setDatabaseName("asset/data/Hydro.edb");
+	db.setDatabaseName(fileName);
 	if (!db.open()) {
 		QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
 			QObject::tr("Unable to establish a database connection.\n"
@@ -673,13 +512,16 @@ bool OpenGLWindow::loadDatabase()
 	//	qDebug() << str;
 	//}
 
+	db.close();
 	return true;
 }
 
-void OpenGLWindow::loadDataFiles()
+void OpenGLWindow::loadDataFiles(const QString& fileName)
 {
     // 加载模型网格数据
-	QFile modelFile("asset/data/model001.f3grid");
+	QString modelFileName = fileName;
+	QFileInfo fileInfo(modelFileName);
+	QFile modelFile(modelFileName);
 	if (modelFile.open(QIODevice::ReadOnly))
 	{
 		QTextStream in(&modelFile);
@@ -767,7 +609,8 @@ void OpenGLWindow::loadDataFiles()
 	}
 
 	// 加载三向（XYZ）位移数据数据
-	QFile gridFile("asset/data/gridpoint_result.txt");
+	QString gridPointFileName = modelFileName.replace(fileInfo.fileName(), "gridpoint_result.txt");
+	QFile gridFile(gridPointFileName);
     if (gridFile.open(QIODevice::ReadOnly))
     {
         QTextStream in(&gridFile);
@@ -791,10 +634,11 @@ void OpenGLWindow::loadDataFiles()
     }
 
 	// 加载应力数据
-	QFile sigForceFile("asset/data/zone_result.txt");
-	if (sigForceFile.open(QIODevice::ReadOnly))
+	QString zoneResultFileName = modelFileName.replace(fileInfo.fileName(), "zone_result.txt");
+	QFile zoneResultFile(zoneResultFileName);
+	if (zoneResultFile.open(QIODevice::ReadOnly))
 	{
-		QTextStream in(&sigForceFile);
+		QTextStream in(&zoneResultFile);
 		in.readLine();
 		while (!in.atEnd())
 		{
@@ -812,7 +656,7 @@ void OpenGLWindow::loadDataFiles()
 			in.readLine();
 		}
 
-        sigForceFile.close();
+        zoneResultFile.close();
 	}
 
 	// zone的缓存计算
@@ -1078,10 +922,16 @@ void OpenGLWindow::interpUniformGrids()
 
 void OpenGLWindow::clipZones(const Plane& plane)
 {
+	if (zones.empty())
+	{
+		return;
+	}
+
 	profileTimer.start();
 	GeoUtil::clipZones(zones, plane, zoneBVHRoot, nodeVertices, sectionVertices, sectionIndices, sectionWireframeIndices);
 	
 	// 更新缓存数据
+	makeCurrent();
 	sectionVAO.bind();
 	sectionVBO.bind();
 	int count = sectionVertices.count() * sizeof(NodeVertex);
@@ -1108,6 +958,11 @@ void OpenGLWindow::clipZones(const Plane& plane)
 
 void OpenGLWindow::genIsosurface(float value)
 {
+	if (zones.empty())
+	{
+		return;
+	}
+
 	// 构建等值面
 	profileTimer.restart();
 	dualmc::DualMC<float> builder;
@@ -1157,6 +1012,11 @@ void OpenGLWindow::genIsosurface(float value)
 
 void OpenGLWindow::genIsolines(float value)
 {
+	if (zones.empty())
+	{
+		return;
+	}
+
 	// 计算等值线
 	isolineVertices.clear();
 	QVector<ClipLine> clipLines;
@@ -1249,4 +1109,225 @@ void OpenGLWindow::bindShadedShaderProgram()
 
 	shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
 	shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
+}
+
+void OpenGLWindow::initResources()
+{
+	// 创建基础节点顶点缓存对象
+	nodeVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+	nodeVBO.create();
+	nodeVBO.bind();
+	nodeVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+	nodeVBO.allocate(nodeVertices.constData(), nodeVertices.count() * sizeof(NodeVertex));
+
+	// 创建点模式相关渲染资源
+	{
+		// create the vertex array object
+		pointVAO.create();
+		pointVAO.bind();
+		pointVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		pointVBO.create();
+		pointVBO.bind();
+		pointVBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		pointVBO.allocate(uniformGrids.points.constData(), uniformGrids.points.count() * sizeof(NodeVertex));
+
+		bindPointShaderProgram();
+	}
+
+	// 创建线框模式相关渲染资源
+	{
+		// create the vertex array object
+		wireframeVAO.create();
+		wireframeVAO.bind();
+		nodeVBO.bind();
+
+		// create the index buffer object
+		wireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		wireframeIBO.create();
+		wireframeIBO.bind();
+		wireframeIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		wireframeIBO.allocate(wireframeIndices.constData(), wireframeIndices.count() * sizeof(uint32_t));
+
+		bindWireframeShaderProgram();
+	}
+
+	// 创建单元模式相关渲染资源
+	{
+		zoneVAO.create();
+		zoneVAO.bind();
+		nodeVBO.bind();
+
+		// create the index buffer object
+		zoneIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		zoneIBO.create();
+		zoneIBO.bind();
+		zoneIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		zoneIBO.allocate(zoneIndices.constData(), zoneIndices.count() * sizeof(uint32_t));
+		bindShadedShaderProgram();
+	}
+
+	// 创建Face相关渲染资源
+	{
+		facetVAO.create();
+		facetVAO.bind();
+		nodeVBO.bind();
+
+		// create the index buffer object
+		facetIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		facetIBO.create();
+		facetIBO.bind();
+		facetIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		facetIBO.allocate(facetIndices.constData(), facetIndices.count() * sizeof(uint32_t));
+		bindShadedShaderProgram();
+	}
+
+	// 创建截面相关渲染资源
+	{
+		const int kMaxSectionVertexNum = 5000;
+		sectionVertices.resize(kMaxSectionVertexNum);
+		sectionIndices.resize(sectionVertices.count() * 10);
+
+		sectionVAO.create();
+		sectionVAO.bind();
+
+		sectionVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		sectionVBO.create();
+		sectionVBO.bind();
+		sectionVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
+		sectionVBO.allocate(sectionVertices.constData(), sectionVertices.count() * sizeof(NodeVertex));
+
+		// create the index buffer object
+		sectionIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		sectionIBO.create();
+		sectionIBO.bind();
+		sectionIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+		sectionIBO.allocate(sectionIndices.constData(), sectionIndices.count() * sizeof(uint32_t));
+		bindShadedShaderProgram();
+
+		// 初始化截面线框资源
+		sectionWireframeIndices.resize(sectionVertices.count() * 5);
+
+		sectionWireframeVAO.create();
+		sectionWireframeVAO.bind();
+		sectionVBO.bind();
+
+		// create the index buffer object
+		sectionWireframeIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		sectionWireframeIBO.create();
+		sectionWireframeIBO.bind();
+		sectionWireframeIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+		sectionWireframeIBO.allocate(sectionWireframeIndices.constData(), sectionWireframeIndices.count() * sizeof(uint32_t));
+
+		sectionVertices.clear();
+		sectionIndices.clear();
+		sectionWireframeIndices.clear();
+		bindWireframeShaderProgram();
+	}
+
+	// 创建等值面相关渲染资源
+	{
+		const int kMaxIsosurfaceVertexNum = 30000;
+		isosurfaceVertices.resize(kMaxIsosurfaceVertexNum);
+		isosurfaceIndices.resize(isosurfaceVertices.count() * 10);
+
+		isosurfaceVAO.create();
+		isosurfaceVAO.bind();
+
+		isosurfaceVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		isosurfaceVBO.create();
+		isosurfaceVBO.bind();
+		isosurfaceVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
+		isosurfaceVBO.allocate(isosurfaceVertices.constData(), isosurfaceVertices.count() * sizeof(NodeVertex));
+
+		// create the index buffer object
+		isosurfaceIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		isosurfaceIBO.create();
+		isosurfaceIBO.bind();
+		isosurfaceIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+		isosurfaceIBO.allocate(isosurfaceIndices.constData(), isosurfaceIndices.count() * sizeof(uint32_t));
+
+		isosurfaceVertices.clear();
+		isosurfaceIndices.clear();
+		bindPointShaderProgram();
+	}
+
+	// 创建等值线相关渲染资源
+	{
+		const int kMaxIsolineVertexNum = 50000;
+		isolineVertices.resize(kMaxIsolineVertexNum);
+
+		isolineVAO.create();
+		isolineVAO.bind();
+
+		isolineVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		isolineVBO.create();
+		isolineVBO.bind();
+		isolineVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
+		isolineVBO.allocate(isolineVertices.constData(), isolineVertices.count() * sizeof(NodeVertex));
+
+		isolineVertices.clear();
+		bindPointShaderProgram();
+	}
+
+	// 创建obj模型相关渲染资源
+	{
+		objVAO.create();
+		objVAO.bind();
+
+		objVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		objVBO.create();
+		objVBO.bind();
+		objVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::StaticDraw);
+		objVBO.allocate(objMesh.vertices.constData(), objMesh.vertices.count() * sizeof(QVector3D));
+
+		// create the index buffer object
+		objIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		objIBO.create();
+		objIBO.bind();
+		objIBO.setUsagePattern(QOpenGLBuffer::StaticDraw);
+		objIBO.allocate(objIndices.constData(), objIndices.count() * sizeof(uint32_t));
+	}
+}
+
+void OpenGLWindow::cleanResources()
+{
+	nodeVertices.clear();
+	facets.clear();
+	mesh.clear();
+	objMesh.clear();
+	zones.clear();
+	valueRange.reset();
+	zoneTypes.clear();
+	GeoUtil::destroyBVHTree(zoneBVHRoot);
+	GeoUtil::destroyBVHTree(faceBVHRoot);
+	uniformGrids.clear();
+	wireframeIndices.clear();
+	zoneIndices.clear();
+	facetIndices.clear();
+	sectionVertices.clear();
+	sectionIndices.clear();
+	sectionWireframeIndices.clear();
+	isosurfaceVertices.clear();
+	isosurfaceIndices.clear();
+	isolineVertices.clear();
+	objIndices.clear();
+
+	makeCurrent();
+	nodeVBO.destroy();
+	wireframeVAO.destroy();
+	wireframeIBO.destroy();
+	zoneVAO.destroy();
+	zoneIBO.destroy();
+	facetVAO.destroy();
+	facetIBO.destroy();
+	sectionVAO.destroy();
+	sectionVBO.destroy();
+	sectionIBO.destroy();
+	sectionWireframeVAO.destroy();
+	sectionWireframeIBO.destroy();
+	isolineVAO.destroy();
+	isolineVBO.destroy();
+	objVAO.destroy();
+	objVBO.destroy();
+	objIBO.destroy();
 }

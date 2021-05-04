@@ -36,6 +36,13 @@ public:
 
     QVector2D getIsoValueRange();
 
+    void openFile(const QString& fileName);
+    void exportToEDB(const QString& exportPath);
+
+signals:
+	void onModelStartLoad();
+	void onModelFinishLoad();
+
 protected:
     void paintGL() override;
     void resizeGL(int w, int h) override;
@@ -48,8 +55,8 @@ protected:
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
-    bool loadDatabase();
-    void loadDataFiles();
+    bool loadDatabase(const QString& fileName);
+    void loadDataFiles(const QString& fileName);
     void addFacet(Facet& facet);
     void addZone(Zone& zone);
 
@@ -63,6 +70,9 @@ private:
     void bindPointShaderProgram();
     void bindWireframeShaderProgram();
     void bindShadedShaderProgram();
+
+    void initResources();
+    void cleanResources();
 
     QVector<NodeVertex> nodeVertices;
     QVector<Facet> facets;

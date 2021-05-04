@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1323</width>
+    <width>1331</width>
     <height>880</height>
    </rect>
   </property>
@@ -413,7 +413,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1323</width>
+     <width>1331</width>
      <height>23</height>
     </rect>
    </property>
@@ -421,10 +421,16 @@
     <property name="title">
      <string>文件(&amp;F)</string>
     </property>
+    <addaction name="openAction"/>
     <addaction name="exportAction"/>
    </widget>
    <addaction name="fileMenu"/>
   </widget>
+  <action name="openAction">
+   <property name="text">
+    <string>打开(&amp;O)</string>
+   </property>
+  </action>
   <action name="exportAction">
    <property name="text">
     <string>导出(&amp;E)</string>
