@@ -94,13 +94,13 @@ struct BVHTreeNode
 struct NodeVertex
 {
 	QVector3D position;
-	float totalDeformation;
+	float totalDeformation = 0.0f;
 	QVector3D deformation;
 	QVector3D normalElasticStrain;
 	QVector3D shearElasticStrain;
-	float maximumPrincipalStress;
-	float middlePrincipalStress;
-	float minimumPrincipalStress;
+	float maximumPrincipalStress = 0.0f;
+	float middlePrincipalStress = 0.0f;
+	float minimumPrincipalStress = 0.0f;
 	QVector3D normalStress;
 	QVector3D shearStress;
 };
@@ -167,7 +167,7 @@ struct ValueRange
 
 enum ZoneType
 {
-	Brick, Wedge, Pyramid, DegeneratedBrick, Tetrahedron
+	Brick = 1, Tetrahedron = 2, Wedge = 3, Pyramid = 4, DegeneratedBrick = 5
 };
 
 enum FacetType
@@ -199,6 +199,8 @@ struct Zone
 struct Facet
 {
 	FacetType type;
+	int elemID;
+	int facetID;
 	int num;
 	quint32 indices[4];
 };

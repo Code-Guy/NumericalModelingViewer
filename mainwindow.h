@@ -26,6 +26,7 @@ public slots:
 	void onPlaneNormalXLineEditTextChanged(const QString& text);
 	void onPlaneNormalYLineEditTextChanged(const QString& text);
 	void onPlaneNormalZLineEditTextChanged(const QString& text);
+	void onDisableClipCheckBoxStateChanged(int state);
 
 	void onIsosurfaceValueChanged(int value);
 	void onIsosurfaceShowWireframeCheckBoxStateChanged(int state);

@@ -25,6 +25,7 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	faceBVHRoot = nullptr;
 
 	displayMode = ClipZone;
+	disableClip = false;
 	showIsosurfaceWireframe = false;
 	showIsolineWireframe = false;
 }
@@ -53,6 +54,11 @@ void OpenGLWindow::setClipPlane(const Plane& inClipPlane)
 	clipPlane = inClipPlane;
 	clipPlane.normalize();
 	clipZones(clipPlane);
+}
+
+void OpenGLWindow::setDisableClip(bool flag)
+{
+	disableClip = flag;
 }
 
 void OpenGLWindow::setIsosurfaceValue(float inIsosurfaceValue)
@@ -92,12 +98,13 @@ void OpenGLWindow::openFile(const QString& fileName)
 	if (suffix == "edb")
 	{
 		loadDatabase(fileName);
+		//printDatabase(fileName);
 	}
 	else if (suffix == "f3grid")
 	{
 		loadDataFiles(fileName);
 	}
-	
+
 	preprocess();
 	initResources();
 
@@ -115,11 +122,221 @@ void OpenGLWindow::openFile(const QString& fileName)
 	emit onModelFinishLoad();
 }
 
-void OpenGLWindow::exportToEDB(const QString& exportPath)
+bool OpenGLWindow::exportToEDB(const QString& exportPath)
 {
+	if (zones.empty())
+	{
+		return false;
+	}
+
 	QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
 	db.setDatabaseName(exportPath);
-	
+
+	if (!db.open())
+	{
+		QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
+			QObject::tr("Unable to establish a database connection.\n"
+				"This example needs SQLite support. Please read "
+				"the Qt SQL driver documentation for information how "
+				"to build it.\n\n"
+				"Click Cancel to exit."), QMessageBox::Cancel);
+		return false;
+	}
+
+	QSqlQuery query;
+	db.transaction();
+
+	// 创建节点索引及空间坐标表格
+	query.exec("create table NODES(ID INTEGER primary key, X REAL, Y REAL, Z REAL)");
+	for (int i = 0; i < nodeVertices.size(); ++i)
+	{
+		const NodeVertex& nodeVertice = nodeVertices[i];
+		query.exec(QString("INSERT INTO NODES VALUES(%1, %2, %3, %4)").
+			arg(i + 1).
+			arg(nodeVertice.position[0]).
+			arg(nodeVertice.position[1]).
+			arg(nodeVertice.position[2]));
+	}
+
+	// 创建每个节点对应的计算结果值表格
+	query.exec("create table RESULTS(NODEID INTEGER primary key, \
+		USUM REAL, UX REAL, UY REAL, UZ REAL, \
+		EPTOX REAL, EPTOY REAL, EPTOZ REAL, \
+		EPTOXY REAL, EPTOYZ REAL, EPTOXZ REAL, \
+		S1 REAL, S2 REAL, S3 REAL, \
+		SX REAL, SY REAL, SZ REAL, \
+		SXY REAL, SYZ REAL, SXZ REAL)");
+	for (int i = 0; i < nodeVertices.size(); ++i)
+	{
+		const NodeVertex& nodeVertice = nodeVertices[i];
+		query.exec(QString("INSERT INTO RESULTS VALUES(%1, %2, %3, %4, %5, %6, %7,\
+			%8, %9, %10, %11, %12, %13, %14, %15, %16, %17, %18, %19, %20)").
+			arg(i + 1).
+			arg(nodeVertice.totalDeformation).
+			arg(nodeVertice.deformation[0]).
+			arg(nodeVertice.deformation[1]).
+			arg(nodeVertice.deformation[2]).
+			arg(nodeVertice.normalElasticStrain[0]).
+			arg(nodeVertice.normalElasticStrain[1]).
+			arg(nodeVertice.normalElasticStrain[2]).
+			arg(nodeVertice.shearElasticStrain[0]).
+			arg(nodeVertice.shearElasticStrain[1]).
+			arg(nodeVertice.shearElasticStrain[2]).
+			arg(nodeVertice.maximumPrincipalStress).
+			arg(nodeVertice.middlePrincipalStress).
+			arg(nodeVertice.minimumPrincipalStress).
+			arg(nodeVertice.normalStress[0]).
+			arg(nodeVertice.normalStress[1]).
+			arg(nodeVertice.normalStress[2]).
+			arg(nodeVertice.shearStress[0]).
+			arg(nodeVertice.shearStress[1]).
+			arg(nodeVertice.shearStress[2]));
+	}
+
+	// 创建网格单元类型信息表格
+	query.exec("create table ELETYPE(ID INTEGER primary key, TYPE INTEGER, TYPENAME TEXT)");
+	query.exec(QString("INSERT INTO ELETYPE VALUES(1, 0, \"185\")"));
+	query.exec(QString("INSERT INTO ELETYPE VALUES(2, 4, \"154\")"));
+
+	// 创建网格单元节点索引表格
+	QString elementsTableCreateSql("create table ELEMENTS(ID INTEGER primary key, TYPE INTEGER, NUM INTEGER");
+	for (int i = 0; i < 50; ++i)
+	{
+		elementsTableCreateSql += QString(", N%1 INTEGER").arg(i + 1);
+	}
+	elementsTableCreateSql += ")";
+
+	query.exec(elementsTableCreateSql);
+	for (int i = 0; i < zones.size(); ++i)
+	{
+		const Zone& zone = zones[i];
+		QString elementsTableInsertSql(QString("INSERT INTO ELEMENTS VALUES(%1, %2, %3").
+			arg(i + 1).
+			arg(zone.type).
+			arg(zone.vertexNum));
+		static const int reorders[8] = { 0, 1, 4, 2, 3, 6, 7, 5 };
+		for (int i = 0; i < 50; ++i)
+		{
+			int index = 0;
+			if (i < zone.vertexNum)
+			{
+				index = zone.vertices[zone.type == Brick ? reorders[i] : i];
+				index++;
+			}
+			elementsTableInsertSql += QString(", %1").arg(index);
+		}
+		elementsTableInsertSql += ")";
+
+		query.exec(elementsTableInsertSql);
+	}
+
+	// 创建模型所有外表面对应的节点索引信息表格
+	QString exteriorTableCreateSql("create table EXTERIOR(ID INT primary key, ELEMID INT, FACETID INT, NUM INT");
+	for (int i = 0; i < 50; ++i)
+	{
+		exteriorTableCreateSql += QString(", N%1 INT").arg(i + 1);
+	}
+	exteriorTableCreateSql += ")";
+
+	query.exec(exteriorTableCreateSql);
+	for (int i = 0; i < exteriorFacets.size(); ++i)
+	{
+		const Facet& facet = exteriorFacets[i];
+		QString exteriorTableInsertSql(QString("INSERT INTO EXTERIOR VALUES(%1, %2, %3, %4").
+			arg(i + 1).
+			arg(facet.elemID + 1).
+			arg(facet.facetID + 1).
+			arg(facet.num));
+		for (int i = 0; i < 50; ++i)
+		{
+			exteriorTableInsertSql += QString(", %1").arg(i < facet.num ? facet.indices[i] + 1 : 0);
+		}
+		exteriorTableInsertSql += ")";
+
+		query.exec(exteriorTableInsertSql);
+	}
+
+	// 创建网格单元包含的线条信息，每个线条通过两个点索引表征表格
+	QString facetsTableCreateSql("create table FACETS(ID INTEGER primary key, ELEMID INTEGER, NUM INTEGER");
+	for (int i = 0; i < 50; ++i)
+	{
+		facetsTableCreateSql += QString(", N%1 INTEGER").arg(i + 1);
+	}
+	facetsTableCreateSql += ")";
+
+	query.exec(facetsTableCreateSql);
+	for (int i = 0; i < allFacets.size(); ++i)
+	{
+		const Facet& facet = allFacets[i];
+		QString facetsTableInsertSql(QString("INSERT INTO FACETS VALUES(%1, %2, %3").
+			arg(i + 1).
+			arg(facet.elemID + 1).
+			arg(facet.num));
+		for (int i = 0; i < 50; ++i)
+		{
+			facetsTableInsertSql += QString(", %1").arg(i < facet.num ? facet.indices[i] + 1 : 0);
+		}
+		facetsTableInsertSql += ")";
+
+		query.exec(facetsTableInsertSql);
+	}
+
+	// 创建模型所有表面对应的节点索引信息表格
+	QString elemEdgesTableCreateSql("create table FACETS(ID INTEGER primary key, ELEMID INTEGER, EDGENUM INTEGER");
+	for (int i = 0; i < 20; ++i)
+	{
+		elemEdgesTableCreateSql += QString(", startIdx%1 INTEGER, endIdx1%1 INTEGER").arg(i + 1);
+	}
+	elemEdgesTableCreateSql += ")";
+
+	query.exec(elemEdgesTableCreateSql);
+	for (int i = 0; i < zones.size(); ++i)
+	{
+		const Zone& zone = zones[i];
+		QString elemEdgesTableInsertSql(QString("INSERT INTO FACETS VALUES(%1, %2, %3").
+			arg(i + 1).
+			arg(i + 1).
+			arg(zone.edgeNum));
+		for (int j = 0; j < 20; ++j)
+		{
+			int startIndex = j < zone.edgeNum ? zone.edges[j * 2] + 1 : 0;
+			int endIndex = j < zone.edgeNum ? zone.edges[j * 2 + 1] + 1 : 0;
+			elemEdgesTableInsertSql += QString(", %1, %2").arg(startIndex, endIndex);
+		}
+		elemEdgesTableInsertSql += ")";
+
+		query.exec(elemEdgesTableInsertSql);
+	}
+
+	// 创建计算结果类型、名称表格
+	query.exec("create table RSTTYPE(ID INTEGER primary key, Code TEXT, Name TEXT, Type TEXT, Unit TEXT)");
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(1, \"USUM\", \"%1\", \"Total Deformation\", \"m\")").arg(QStringLiteral("HDY_总位移")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(2, \"UX\", \"%1\", \"Directional Deformation(X Axis)\", \"m\")").arg(QStringLiteral("HDY_X方向位移")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(3, \"UY\", \"%1\", \"Directional Deformation(Y Axis)\", \"m\")").arg(QStringLiteral("HDY_Y方向位移")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(4, \"UZ\", \"%1\", \"Directional Deformation(Z Axis)\", \"m\")").arg(QStringLiteral("HDY_Z方向位移")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(5, \"EPTOX\", \"%1\", \"Normal Elastic Strain(X Axis)\", \"m/m\")").arg(QStringLiteral("HDY_X方向正应变")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(6, \"EPTOY\", \"%1\", \"Normal Elastic Strain(Y Axis)\", \"m/m\")").arg(QStringLiteral("HDY_Y方向正应变")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(7, \"EPTOZ\", \"%1\", \"Normal Elastic Strain(Z Axis)\", \"m/m\")").arg(QStringLiteral("HDY_Z方向正应变")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(8, \"EPTOXY\", \"%1\", \"Shear Elastic Strain(XY Plane)\", \"m/m\")").arg(QStringLiteral("HDY_XY平面剪应变")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(9, \"EPTOYZ\", \"%1\", \"Shear Elastic Strain(YZ Plane)\", \"m/m\")").arg(QStringLiteral("HDY_YZ平面剪应变")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(10, \"EPTOXZ\", \"%1\", \"Shear Elastic Strain(XZ Plane)\", \"m/m\")").arg(QStringLiteral("HDY_XZ平面剪应变")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(11, \"S1\", \"%1\", \"Maximum Principal Stress\", \"Pa\")").arg(QStringLiteral("HDY_最大主应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(12, \"S2\", \"%1\", \"Middle Principal Stress\", \"Pa\")").arg(QStringLiteral("HDY_中间主应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(13, \"S3\", \"%1\", \"Minimum Principal Stress\", \"Pa\")").arg(QStringLiteral("HDY_最小主应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(14, \"SX\", \"%1\", \"Normal Stress(X Axis)\", \"Pa\")").arg(QStringLiteral("HDY_X方向正应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(15, \"SY\", \"%1\", \"Normal Stress(Y Axis)\", \"Pa\")").arg(QStringLiteral("HDY_Y方向正应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(16, \"SZ\", \"%1\", \"Normal Stress(Z Axis)\", \"Pa\")").arg(QStringLiteral("HDY_Z方向正应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(17, \"SXY\", \"%1\", \"Shear Stress(XY Plane)\", \"Pa\")").arg(QStringLiteral("HDY_XY平面剪应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(18, \"SYZ\", \"%1\", \"Shear Stress(YZ Plane)\", \"Pa\")").arg(QStringLiteral("HDY_YZ平面剪应力")));
+	query.exec(QString("INSERT INTO RSTTYPE VALUES(19, \"SXZ\", \"%1\", \"Shear Stress(XZ Plane)\", \"Pa\")").arg(QStringLiteral("HDY_XZ平面剪应力")));
+
+	db.commit();
+	db.close();
+
+	QMessageBox::information(this, QStringLiteral("提示"),
+		QStringLiteral("导出成功！"),
+		QMessageBox::Ok);
+	return true;
 }
 
 void OpenGLWindow::initializeGL()
@@ -227,7 +444,7 @@ void OpenGLWindow::paintGL()
 	if (displayMode == ClipZone)
 	{
 		wireframeVAO.bind();
-		wireframeShaderProgram->setUniformValue("skipClip", false);
+		wireframeShaderProgram->setUniformValue("skipClip", disableClip);
 		glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 		sectionWireframeVAO.bind();
@@ -241,7 +458,7 @@ void OpenGLWindow::paintGL()
 		shadedShaderProgram->setUniformValue("plane.dist", clipPlane.dist);
 
 		zoneVAO.bind();
-		shadedShaderProgram->setUniformValue("skipClip", false);
+		shadedShaderProgram->setUniformValue("skipClip", disableClip);
 		glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
 		sectionVAO.bind();
@@ -322,7 +539,8 @@ bool OpenGLWindow::loadDatabase(const QString& fileName)
 {
 	QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
 	db.setDatabaseName(fileName);
-	if (!db.open()) {
+	if (!db.open())
+	{
 		QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
 			QObject::tr("Unable to establish a database connection.\n"
 				"This example needs SQLite support. Please read "
@@ -453,6 +671,8 @@ bool OpenGLWindow::loadDatabase(const QString& fileName)
 	while (query.next())
 	{
 		Facet facet;
+		facet.elemID = query.value(1).toInt() - 1;
+		facet.facetID = query.value(2).toInt() - 1;
 		facet.num = query.value(3).toInt();
 		if (facet.num == 4)
 		{
@@ -495,7 +715,7 @@ bool OpenGLWindow::loadDatabase(const QString& fileName)
 	//		facet.indices[i] = query.value(i + 3).toInt() - 1;
 	//	}
 
-	//	facets.append(facet);
+	//	allFacets.append(facet);
 	//}
 
 	// 查询计算结果类型、名称
@@ -516,9 +736,70 @@ bool OpenGLWindow::loadDatabase(const QString& fileName)
 	return true;
 }
 
+bool OpenGLWindow::printDatabase(const QString& fileName)
+{
+	QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+	db.setDatabaseName(fileName);
+	if (!db.open())
+	{
+		QMessageBox::critical(nullptr, QObject::tr("Cannot open database"),
+			QObject::tr("Unable to establish a database connection.\n"
+				"This example needs SQLite support. Please read "
+				"the Qt SQL driver documentation for information how "
+				"to build it.\n\n"
+				"Click Cancel to exit."), QMessageBox::Cancel);
+		return false;
+	}
+
+	// 打印数据库的表结构
+	QStringList tables = db.tables();  //获取数据库中的表
+	qDebug() << QString::fromLocal8Bit("表的个数: %1").arg(tables.count()); //打印表的个数
+	QStringListIterator itr(tables);
+	while (itr.hasNext())
+	{
+		QString tableName = itr.next().toLocal8Bit();
+		qDebug() << QString::fromLocal8Bit("表名: ") + tableName;
+
+		QSqlQuery query(QString("PRAGMA table_info(%1)").arg(tableName));
+		while (query.next())
+		{
+			qDebug() << QString(QString::fromLocal8Bit("字段索引: %1    字段名称: %2    字段类型: %3")).
+				arg(query.value(0).toString()).arg(query.value(1).toString()).arg(query.value(2).toString());
+		}
+	}
+
+	// 打印数据库的部分内容
+	const int kMaxRecordNum = 100;
+	QSqlQuery query;
+	QSqlRecord record;
+	QStringList tableNames = { "NODES", "RESULTS", "ELETYPE", "ELEMENTS",
+		"EXTERIOR", "ELEMEDGES", "FACETS", "RSTTYPE" };
+	for (const QString& tableName : tableNames)
+	{
+		qDebug().noquote() << QString("\n%1:").arg(tableName);
+
+		int RecordNum = 0;
+		query.exec(QString("SELECT * FROM %1").arg(tableName));
+		record = query.record();
+		while (query.next() && RecordNum++ < kMaxRecordNum)
+		{
+			QString str;
+			for (int i = 0; i < record.count(); ++i)
+			{
+				str += query.value(i).toString() + "-";
+			}
+
+			qDebug() << str;
+		}
+	}
+
+	db.close();
+	return true;
+}
+
 void OpenGLWindow::loadDataFiles(const QString& fileName)
 {
-    // 加载模型网格数据
+	// 加载模型网格数据
 	QString modelFileName = fileName;
 	QFileInfo fileInfo(modelFileName);
 	QFile modelFile(modelFileName);
@@ -527,10 +808,10 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 		QTextStream in(&modelFile);
 		while (!in.atEnd())
 		{
-            QString header;
-            in >> header;
-            if (header == "G")
-            {
+			QString header;
+			in >> header;
+			if (header == "G")
+			{
 				int index;
 				NodeVertex nodeVertex;
 				in >> index >> nodeVertex.position[0] >> nodeVertex.position[1] >> nodeVertex.position[2];
@@ -538,13 +819,13 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 				nodeVertex.position *= 8.0f;
 				mesh.vertices.append(nodeVertex.position);
 				nodeVertices.append(nodeVertex);
-            }
-            else if (header == "Z")
-            {
-                Zone zone;
-                QString type;
-                int Index;
-                in >> type >> Index;
+			}
+			else if (header == "Z")
+			{
+				Zone zone;
+				QString type;
+				int Index;
+				in >> type >> Index;
 
 				if (type == "W6")
 				{
@@ -552,28 +833,28 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 					zone.vertexNum = 6;
 					zone.edgeNum = 9;
 				}
-                else if (type == "B8")
-                {
-                    zone.type = Brick;
-                    zone.vertexNum = 8;
+				else if (type == "B8")
+				{
+					zone.type = Brick;
+					zone.vertexNum = 8;
 					zone.edgeNum = 12;
-                }
-                else
-                {
-                    qDebug() << "Unknown zone type: " << type;
-                    return;
-                }
+				}
+				else
+				{
+					qDebug() << "Unknown zone type: " << type;
+					return;
+				}
 
-                for (int i = 0; i < zone.vertexNum; ++i)
-                {
-                    in >> zone.vertices[i];
-                    zone.vertices[i] -= 1;
-                }
+				for (int i = 0; i < zone.vertexNum; ++i)
+				{
+					in >> zone.vertices[i];
+					zone.vertices[i] -= 1;
+				}
 
 				addZone(zone);
-            }
-            else if (header == "F")
-            {
+			}
+			else if (header == "F")
+			{
 				Facet facet;
 				QString type;
 				int Index;
@@ -591,7 +872,7 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 				}
 				else
 				{
-					qDebug() << "Unknown zone type: " << type;
+					qDebug() << "Unknown face type: " << type;
 					return;
 				}
 
@@ -601,8 +882,10 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 					facet.indices[i] -= 1;
 				}
 
+				facet.elemID = 0;
+				facet.facetID = exteriorFacets.count();
 				addFacet(facet);
-            }
+			}
 			in.readLine();
 		}
 		modelFile.close();
@@ -611,27 +894,27 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 	// 加载三向（XYZ）位移数据数据
 	QString gridPointFileName = modelFileName.replace(fileInfo.fileName(), "gridpoint_result.txt");
 	QFile gridFile(gridPointFileName);
-    if (gridFile.open(QIODevice::ReadOnly))
-    {
-        QTextStream in(&gridFile);
-        in.readLine();
-        while (!in.atEnd())
-        {
-            int index;
-            in >> index;
-            index -= 1;
+	if (gridFile.open(QIODevice::ReadOnly))
+	{
+		QTextStream in(&gridFile);
+		in.readLine();
+		while (!in.atEnd())
+		{
+			int index;
+			in >> index;
+			index -= 1;
 
-            in >> nodeVertices[index].deformation[0] >>
+			in >> nodeVertices[index].deformation[0] >>
 				nodeVertices[index].deformation[1] >>
 				nodeVertices[index].totalDeformation;
 
 			valueRange.minTotalDeformation = qMin(valueRange.minTotalDeformation, nodeVertices[index].totalDeformation);
 			valueRange.maxTotalDeformation = qMax(valueRange.maxTotalDeformation, nodeVertices[index].totalDeformation);
-            in.readLine();
-        }
+			in.readLine();
+		}
 
-        gridFile.close();
-    }
+		gridFile.close();
+	}
 
 	// 加载应力数据
 	QString zoneResultFileName = modelFileName.replace(fileInfo.fileName(), "zone_result.txt");
@@ -656,7 +939,7 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 			in.readLine();
 		}
 
-        zoneResultFile.close();
+		zoneResultFile.close();
 	}
 
 	// zone的缓存计算
@@ -683,7 +966,7 @@ void OpenGLWindow::addFacet(Facet& facet)
 	{
 		facet.num = 3;
 	}
-	facets.append(facet);
+	exteriorFacets.append(facet);
 
 	QVector<uint32_t> indices;
 	if (facet.num == 3)
@@ -723,6 +1006,8 @@ void OpenGLWindow::addZone(Zone& zone)
 	}
 	zone.bound.cache();
 
+	int elemID = zones.count();
+	int facetID = allFacets.count();
 	if (zone.vertexNum == 8)
 	{
 		zoneIndices.append({ zone.vertices[0], zone.vertices[2], zone.vertices[1],
@@ -737,6 +1022,15 @@ void OpenGLWindow::addZone(Zone& zone)
 			zone.vertices[1], zone.vertices[6], zone.vertices[3],
 			zone.vertices[3], zone.vertices[6], zone.vertices[5],
 			zone.vertices[6], zone.vertices[7], zone.vertices[5]
+			});
+		
+		allFacets.append({
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[2], zone.vertices[1], zone.vertices[4]}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[3], zone.vertices[2], zone.vertices[5]}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[2], zone.vertices[5], zone.vertices[4], zone.vertices[7]}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[1], zone.vertices[4], zone.vertices[6], zone.vertices[7]}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[1], zone.vertices[3], zone.vertices[6]}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[3], zone.vertices[6], zone.vertices[5], zone.vertices[7]}}
 			});
 
 		zone.edges[0] = zone.vertices[0];
@@ -778,6 +1072,14 @@ void OpenGLWindow::addZone(Zone& zone)
 			zone.vertices[2], zone.vertices[3], zone.vertices[5]
 			});
 
+		allFacets.append({
+			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[1], zone.vertices[3], 0}},
+			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[2], zone.vertices[5], zone.vertices[4], 0}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[2], zone.vertices[1], zone.vertices[4]}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[1], zone.vertices[5], zone.vertices[3], zone.vertices[4]}},
+			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[3], zone.vertices[2], zone.vertices[5]}}
+			});
+
 		zone.edges[0] = zone.vertices[0];
 		zone.edges[1] = zone.vertices[1];
 		zone.edges[2] = zone.vertices[1];
@@ -803,6 +1105,13 @@ void OpenGLWindow::addZone(Zone& zone)
 			zone.vertices[0], zone.vertices[3], zone.vertices[2],
 			zone.vertices[1], zone.vertices[2], zone.vertices[3],
 			zone.vertices[0], zone.vertices[2], zone.vertices[1],
+			});
+
+		allFacets.append({
+			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[1], zone.vertices[3], 0}},
+			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[3], zone.vertices[2], 0}},
+			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[1], zone.vertices[2], zone.vertices[3], 0}},
+			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[2], zone.vertices[1], 0}},
 			});
 
 		zone.edges[0] = zone.vertices[0];
@@ -929,7 +1238,7 @@ void OpenGLWindow::clipZones(const Plane& plane)
 
 	profileTimer.start();
 	GeoUtil::clipZones(zones, plane, zoneBVHRoot, nodeVertices, sectionVertices, sectionIndices, sectionWireframeIndices);
-	
+
 	// 更新缓存数据
 	makeCurrent();
 	sectionVAO.bind();
@@ -968,8 +1277,8 @@ void OpenGLWindow::genIsosurface(float value)
 	dualmc::DualMC<float> builder;
 	std::vector<dualmc::Vertex> vertices;
 	std::vector<dualmc::Quad> quads;
-	builder.build(uniformGrids.voxelData.constData(), 
-		uniformGrids.dim[2], uniformGrids.dim[1], uniformGrids.dim[0], 
+	builder.build(uniformGrids.voxelData.constData(),
+		uniformGrids.dim[2], uniformGrids.dim[1], uniformGrids.dim[0],
 		value, false, false, vertices, quads);
 
 	qint64 buildIsosurfaceTime = profileTimer.restart();
@@ -984,7 +1293,7 @@ void OpenGLWindow::genIsosurface(float value)
 		position = qMapClampRange(position, QVector3D(0.0f, 0.0f, 0.0f), dimVector, uniformGrids.bound.min, uniformGrids.bound.max);
 		isosurfaceVertices.append({ position, value });
 	}
-	
+
 	isosurfaceIndices.clear();
 	for (const auto& quad : quads)
 	{
@@ -1292,7 +1601,8 @@ void OpenGLWindow::initResources()
 void OpenGLWindow::cleanResources()
 {
 	nodeVertices.clear();
-	facets.clear();
+	exteriorFacets.clear();
+	allFacets.clear();
 	mesh.clear();
 	objMesh.clear();
 	zones.clear();

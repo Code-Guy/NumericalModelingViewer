@@ -29,6 +29,7 @@ public:
 
     void setDisplayMode(DisplayMode inDisplayMode);
     void setClipPlane(const Plane& inClipPlane);
+    void setDisableClip(bool flag);
 	void setIsosurfaceValue(float inIsosurfaceValue);
 	void setShowIsosurfaceWireframe(bool flag);
 	void setIsolineValue(float inIsolineValue);
@@ -37,7 +38,7 @@ public:
     QVector2D getIsoValueRange();
 
     void openFile(const QString& fileName);
-    void exportToEDB(const QString& exportPath);
+    bool exportToEDB(const QString& exportPath);
 
 signals:
 	void onModelStartLoad();
@@ -56,6 +57,8 @@ protected:
 
 private:
     bool loadDatabase(const QString& fileName);
+    bool printDatabase(const QString& fileName);
+
     void loadDataFiles(const QString& fileName);
     void addFacet(Facet& facet);
     void addZone(Zone& zone);
@@ -75,7 +78,8 @@ private:
     void cleanResources();
 
     QVector<NodeVertex> nodeVertices;
-    QVector<Facet> facets;
+    QVector<Facet> exteriorFacets;
+    QVector<Facet> allFacets;
 
 	Mesh mesh;
 	Mesh objMesh;
@@ -140,6 +144,7 @@ private:
 
     DisplayMode displayMode;
     Plane clipPlane;
+    bool disableClip;
     float isosurfaceValue;
     bool showIsosurfaceWireframe;
     float isolineValue;

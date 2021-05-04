@@ -27,6 +27,7 @@ MainWindow::MainWindow(QWidget *parent) :
 	connect(ui->planeNormalXLineEdit, SIGNAL(textChanged(const QString&)), this, SLOT(onPlaneNormalXLineEditTextChanged(const QString&)));
 	connect(ui->planeNormalYLineEdit, SIGNAL(textChanged(const QString&)), this, SLOT(onPlaneNormalYLineEditTextChanged(const QString&)));
 	connect(ui->planeNormalZLineEdit, SIGNAL(textChanged(const QString&)), this, SLOT(onPlaneNormalZLineEditTextChanged(const QString&)));
+	connect(ui->disableClipCheckBox, SIGNAL(stateChanged(int)), this, SLOT(onDisableClipCheckBoxStateChanged(int)));
 
     connect(ui->isosurfaceValueSlider, SIGNAL(valueChanged(int)), this, SLOT(onIsosurfaceValueChanged(int)));
     connect(ui->isosurfaceShowWireframeCheckBox, SIGNAL(stateChanged(int)), this, SLOT(onIsosurfaceShowWireframeCheckBoxStateChanged(int)));
@@ -85,6 +86,12 @@ void MainWindow::onPlaneNormalZLineEditTextChanged(const QString& text)
 {
     clipPlane.normal[2] = text.toFloat();
 	ui->openGLWidget->setClipPlane(clipPlane);
+}
+
+
+void MainWindow::onDisableClipCheckBoxStateChanged(int state)
+{
+    ui->openGLWidget->setDisableClip(state == Qt::Checked);
 }
 
 void MainWindow::onIsosurfaceValueChanged(int value)
