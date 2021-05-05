@@ -300,7 +300,7 @@ QSet<Edge> Facet::getEdges() const
 
 bool Facet::intersect(const QVector<NodeVertex>& nodeVertices, const Ray& ray, float& t) const
 {
-	if (intersect(nodeVertices, indices[0], indices[1], indices[2], ray, t))
+	if (intersect(nodeVertices, indices[0], indices[1], indices[3], ray, t))
 	{
 		return true;
 	}
@@ -326,12 +326,11 @@ bool Facet::intersect(const QVector<NodeVertex>& nodeVertices, quint32 i0, quint
 
 	QVector3D tvec = ray.origin - nodeVertices[i0].position;
 	u = QVector3D::dotProduct(tvec, pvec) * invDet;
-	const float kEpsilon = 0.0f;
-	if (u < -kEpsilon || u > 1.0f + kEpsilon) return false;
+	if (u < 0.0f || u > 1.0f) return false;
 
 	QVector3D qvec = QVector3D::crossProduct(tvec, v0v1);
 	v = QVector3D::dotProduct(ray.direction, qvec) * invDet;
-	if (v < -kEpsilon || u + v > 1.0f + kEpsilon) return false;
+	if (v < 0.0f || u + v > 1.0f) return false;
 
 	t = QVector3D::dotProduct(v0v2, qvec) * invDet;
 	return true;
