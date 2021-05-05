@@ -86,32 +86,19 @@ bool Bound::intersect(const Plane& plane)
 
 bool Bound::intersect(const Ray& ray)
 {
-	QVector3D bounds[2] = { min, max };
+	double tx1 = (min.x() - ray.origin.x()) * ray.invDirection.x();
+	double tx2 = (max.x() - ray.origin.x()) * ray.invDirection.x();
 
-	float tmin, tmax, tymin, tymax, tzmin, tzmax;
-	tmin = (bounds[ray.sign[0]].x() - ray.origin.x()) * ray.invDirection.x();
-	tmax = (bounds[1 - ray.sign[0]].x() - ray.origin.x()) * ray.invDirection.x();
-	tymin = (bounds[ray.sign[1]].y() - ray.origin.y()) * ray.invDirection.y();
-	tymax = (bounds[1 - ray.sign[1]].y() - ray.origin.y()) * ray.invDirection.y();
+	double tmin = qMin(tx1, tx2);
+	double tmax = qMax(tx1, tx2);
 
-	if ((tmin > tymax) || (tymin > tmax))
-		return false;
-	if (tymin > tmin)
-		tmin = tymin;
-	if (tymax < tmax)
-		tmax = tymax;
+	double ty1 = (min.y() - ray.origin.y()) * ray.invDirection.y();
+	double ty2 = (max.y() - ray.origin.y()) * ray.invDirection.y();
 
-	tzmin = (bounds[ray.sign[2]].z() - ray.origin.z()) * ray.invDirection.z();
-	tzmax = (bounds[1 - ray.sign[2]].z() - ray.origin.z()) * ray.invDirection.z();
+	tmin = qMax(tmin, qMin(ty1, ty2));
+	tmax = qMin(tmax, qMax(ty1, ty2));
 
-	if ((tmin > tzmax) || (tzmin > tmax))
-		return false;
-	if (tzmin > tmin)
-		tmin = tzmin;
-	if (tzmax < tmax)
-		tmax = tzmax;
-
-	return true;
+	return tmax >= tmin;
 }
 
 bool Bound::contain(const QVector3D& point) const
