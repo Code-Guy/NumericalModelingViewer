@@ -25,6 +25,8 @@ OpenGLWindow::OpenGLWindow(QWidget* parent) : QOpenGLWidget(parent)
 	faceBVHRoot = nullptr;
 
 	displayMode = ClipZone;
+	pickMode = PickZone;
+
 	disableClip = false;
 	showIsosurfaceWireframe = false;
 	showIsolineWireframe = false;
@@ -47,6 +49,11 @@ OpenGLWindow::~OpenGLWindow()
 void OpenGLWindow::setDisplayMode(DisplayMode inDisplayMode)
 {
 	displayMode = inDisplayMode;
+}
+
+void OpenGLWindow::setPickMode(PickMode inPickMode)
+{
+	pickMode = inPickMode;
 }
 
 void OpenGLWindow::setClipPlane(const Plane& inClipPlane)
@@ -215,12 +222,12 @@ bool OpenGLWindow::exportToEDB(const QString& exportPath)
 			arg(zone.type).
 			arg(zone.vertexNum));
 		static const int reorders[8] = { 0, 1, 4, 2, 3, 6, 7, 5 };
-		for (int i = 0; i < 50; ++i)
+		for (int j = 0; j < 50; ++j)
 		{
 			int index = 0;
-			if (i < zone.vertexNum)
+			if (j < zone.vertexNum)
 			{
-				index = zone.vertices[zone.type == Brick ? reorders[i] : i];
+				index = zone.vertices[zone.type == Brick ? reorders[j] : j];
 				index++;
 			}
 			elementsTableInsertSql += QString(", %1").arg(index);
@@ -247,9 +254,9 @@ bool OpenGLWindow::exportToEDB(const QString& exportPath)
 			arg(facet.elemID + 1).
 			arg(facet.facetID + 1).
 			arg(facet.num));
-		for (int i = 0; i < 50; ++i)
+		for (int j = 0; j < 50; ++j)
 		{
-			exteriorTableInsertSql += QString(", %1").arg(i < facet.num ? facet.indices[i] + 1 : 0);
+			exteriorTableInsertSql += QString(", %1").arg(j < facet.num ? facet.indices[j] + 1 : 0);
 		}
 		exteriorTableInsertSql += ")";
 
@@ -265,20 +272,23 @@ bool OpenGLWindow::exportToEDB(const QString& exportPath)
 	facetsTableCreateSql += ")";
 
 	query.exec(facetsTableCreateSql);
-	for (int i = 0; i < allFacets.size(); ++i)
+	int facetID = 0;
+	for (const Zone& zone : zones)
 	{
-		const Facet& facet = allFacets[i];
-		QString facetsTableInsertSql(QString("INSERT INTO FACETS VALUES(%1, %2, %3").
-			arg(i + 1).
-			arg(facet.elemID + 1).
-			arg(facet.num));
-		for (int i = 0; i < 50; ++i)
+		for (const Facet& facet : zone.facets)
 		{
-			facetsTableInsertSql += QString(", %1").arg(i < facet.num ? facet.indices[i] + 1 : 0);
-		}
-		facetsTableInsertSql += ")";
+			QString facetsTableInsertSql(QString("INSERT INTO FACETS VALUES(%1, %2, %3").
+				arg(++facetID).
+				arg(facet.elemID + 1).
+				arg(facet.num));
+			for (int i = 0; i < 50; ++i)
+			{
+				facetsTableInsertSql += QString(", %1").arg(i < facet.num ? facet.indices[i] + 1 : 0);
+			}
+			facetsTableInsertSql += ")";
 
-		query.exec(facetsTableInsertSql);
+			query.exec(facetsTableInsertSql);
+		}
 	}
 
 	// 创建模型所有表面对应的节点索引信息表格
@@ -396,6 +406,14 @@ void OpenGLWindow::initializeGL()
 		success = shadedShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/shaded_fs.glsl");
 		Q_ASSERT_X(success, "shadedShaderProgram", qPrintable(shadedShaderProgram->log()));
 		shadedShaderProgram->link();
+
+		pickShaderProgram = new QOpenGLShaderProgram;
+		success = pickShaderProgram->addShaderFromSourceFile(QOpenGLShader::Vertex, "asset/shader/pick_vs.glsl");
+		Q_ASSERT_X(success, "pickShaderProgram", qPrintable(pickShaderProgram->log()));
+
+		success = pickShaderProgram->addShaderFromSourceFile(QOpenGLShader::Fragment, "asset/shader/pick_fs.glsl");
+		Q_ASSERT_X(success, "pickShaderProgram", qPrintable(pickShaderProgram->log()));
+		pickShaderProgram->link();
 	}
 
 	// 初始化计时器
@@ -443,13 +461,23 @@ void OpenGLWindow::paintGL()
 
 	if (displayMode == ClipZone)
 	{
+		// 绘制选中线框
+		pickShaderProgram->bind();
+		pickShaderProgram->setUniformValue("mvp", mvp);
+		pickVAO.bind();
+		glDrawElements(GL_LINES, pickIndices.count(), GL_UNSIGNED_INT, nullptr);
+
 		wireframeVAO.bind();
+		wireframeShaderProgram->bind();
 		wireframeShaderProgram->setUniformValue("skipClip", disableClip);
 		glDrawElements(GL_LINES, wireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-		sectionWireframeVAO.bind();
-		wireframeShaderProgram->setUniformValue("skipClip", true);
-		glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+		if (!disableClip)
+		{
+			sectionWireframeVAO.bind();
+			wireframeShaderProgram->setUniformValue("skipClip", true);
+			glDrawElements(GL_LINES, sectionWireframeIndices.count(), GL_UNSIGNED_INT, nullptr);
+		}
 
 		shadedShaderProgram->bind();
 		shadedShaderProgram->setUniformValue("mvp", mvp);
@@ -461,9 +489,12 @@ void OpenGLWindow::paintGL()
 		shadedShaderProgram->setUniformValue("skipClip", disableClip);
 		glDrawElements(GL_TRIANGLES, zoneIndices.count(), GL_UNSIGNED_INT, nullptr);
 
-		sectionVAO.bind();
-		shadedShaderProgram->setUniformValue("skipClip", true);
-		glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+		if (!disableClip)
+		{
+			sectionVAO.bind();
+			shadedShaderProgram->setUniformValue("skipClip", true);
+			glDrawElements(GL_TRIANGLES, sectionIndices.count(), GL_UNSIGNED_INT, nullptr);
+		}
 	}
 	else if (displayMode == Isosurface)
 	{
@@ -513,6 +544,31 @@ void OpenGLWindow::paintGL()
 void OpenGLWindow::mousePressEvent(QMouseEvent* event)
 {
 	camera->onMousePressed(event->button(), event->x(), event->y());
+
+	if (event->button() == Qt::LeftButton && displayMode == ClipZone && pickMode != PickNone && !zones.empty())
+	{
+		QVector3D start = QVector3D(event->x(), height() - event->y() - 1, 0.0f).unproject(camera->getViewMatrix(), camera->getPerspectiveMatrix(), rect());
+		QVector3D end = QVector3D(event->x(), height() - event->y() - 1, 1.0f).unproject(camera->getViewMatrix(), camera->getPerspectiveMatrix(), rect());
+
+		Ray pickRay(start, end - start);
+		GeoUtil::pickZone(zones, pickRay, zoneBVHRoot, nodeVertices, pickIndices, pickMode == PickZone);
+
+		makeCurrent();
+		//pickVertices = { NodeVertex{start}, NodeVertex{end} };
+		//pickVAO.bind();
+		//pickVBO.bind();
+		//int count = pickVertices.count() * sizeof(NodeVertex);
+		//void* dst = pickVBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
+		//memcpy(dst, (void*)pickVertices.constData(), count);
+		//pickVBO.unmap();
+
+		pickVAO.bind();
+		pickIBO.bind();
+		int count = pickIndices.count() * sizeof(uint32_t);
+		void* dst = pickIBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
+		memcpy(dst, (void*)pickIndices.constData(), count);
+		pickIBO.unmap();
+	}
 }
 
 void OpenGLWindow::mouseReleaseEvent(QMouseEvent* event)
@@ -1007,7 +1063,6 @@ void OpenGLWindow::addZone(Zone& zone)
 	zone.bound.cache();
 
 	int elemID = zones.count();
-	int facetID = allFacets.count();
 	if (zone.vertexNum == 8)
 	{
 		zoneIndices.append({ zone.vertices[0], zone.vertices[2], zone.vertices[1],
@@ -1024,13 +1079,13 @@ void OpenGLWindow::addZone(Zone& zone)
 			zone.vertices[6], zone.vertices[7], zone.vertices[5]
 			});
 		
-		allFacets.append({
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[2], zone.vertices[1], zone.vertices[4]}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[3], zone.vertices[2], zone.vertices[5]}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[2], zone.vertices[5], zone.vertices[4], zone.vertices[7]}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[1], zone.vertices[4], zone.vertices[6], zone.vertices[7]}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[1], zone.vertices[3], zone.vertices[6]}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[3], zone.vertices[6], zone.vertices[5], zone.vertices[7]}}
+		zone.facets.append({
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[0], zone.vertices[2], zone.vertices[4], zone.vertices[1]}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[0], zone.vertices[3], zone.vertices[5], zone.vertices[2]}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[2], zone.vertices[5], zone.vertices[7], zone.vertices[4]}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[1], zone.vertices[4], zone.vertices[7], zone.vertices[6]}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[0], zone.vertices[1], zone.vertices[6], zone.vertices[3]}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[3], zone.vertices[6], zone.vertices[7], zone.vertices[5]}}
 			});
 
 		zone.edges[0] = zone.vertices[0];
@@ -1072,12 +1127,12 @@ void OpenGLWindow::addZone(Zone& zone)
 			zone.vertices[2], zone.vertices[3], zone.vertices[5]
 			});
 
-		allFacets.append({
-			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[1], zone.vertices[3], 0}},
-			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[2], zone.vertices[5], zone.vertices[4], 0}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[2], zone.vertices[1], zone.vertices[4]}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[1], zone.vertices[5], zone.vertices[3], zone.vertices[4]}},
-			{FacetType::Q4, elemID, facetID++, 4, {zone.vertices[0], zone.vertices[3], zone.vertices[2], zone.vertices[5]}}
+		zone.facets.append({
+			{FacetType::T3, elemID, Zone::facetID++, 3, {zone.vertices[0], zone.vertices[1], zone.vertices[3], 0}},
+			{FacetType::T3, elemID, Zone::facetID++, 3, {zone.vertices[2], zone.vertices[5], zone.vertices[4], 0}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[0], zone.vertices[2], zone.vertices[4], zone.vertices[1]}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[1], zone.vertices[3], zone.vertices[5], zone.vertices[4]}},
+			{FacetType::Q4, elemID, Zone::facetID++, 4, {zone.vertices[0], zone.vertices[3], zone.vertices[5], zone.vertices[2]}}
 			});
 
 		zone.edges[0] = zone.vertices[0];
@@ -1107,11 +1162,11 @@ void OpenGLWindow::addZone(Zone& zone)
 			zone.vertices[0], zone.vertices[2], zone.vertices[1],
 			});
 
-		allFacets.append({
-			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[1], zone.vertices[3], 0}},
-			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[3], zone.vertices[2], 0}},
-			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[1], zone.vertices[2], zone.vertices[3], 0}},
-			{FacetType::T3, elemID, facetID++, 3, {zone.vertices[0], zone.vertices[2], zone.vertices[1], 0}},
+		zone.facets.append({
+			{FacetType::T3, elemID, Zone::facetID++, 3, {zone.vertices[0], zone.vertices[1], zone.vertices[3], 0}},
+			{FacetType::T3, elemID, Zone::facetID++, 3, {zone.vertices[0], zone.vertices[3], zone.vertices[2], 0}},
+			{FacetType::T3, elemID, Zone::facetID++, 3, {zone.vertices[1], zone.vertices[2], zone.vertices[3], 0}},
+			{FacetType::T3, elemID, Zone::facetID++, 3, {zone.vertices[0], zone.vertices[2], zone.vertices[1], 0}},
 			});
 
 		zone.edges[0] = zone.vertices[0];
@@ -1302,6 +1357,7 @@ void OpenGLWindow::genIsosurface(float value)
 	}
 
 	// 更新GPU缓存资源
+	makeCurrent();
 	isosurfaceVAO.bind();
 	isosurfaceVBO.bind();
 	int count = isosurfaceVertices.count() * sizeof(NodeVertex);
@@ -1341,6 +1397,7 @@ void OpenGLWindow::genIsolines(float value)
 	}
 
 	// 更新缓存数据
+	makeCurrent();
 	isolineVBO.bind();
 	int count = isolineVertices.count() * sizeof(NodeVertex);
 	void* dst = isolineVBO.mapRange(0, count, QOpenGLBuffer::RangeAccessFlag::RangeWrite);
@@ -1418,6 +1475,13 @@ void OpenGLWindow::bindShadedShaderProgram()
 
 	shadedShaderProgram->setUniformValue("valueRange.minShearStress", valueRange.minShearStress);
 	shadedShaderProgram->setUniformValue("valueRange.maxShearStress", valueRange.maxShearStress);
+}
+
+void OpenGLWindow::bindPickShaderProgram()
+{
+	pickShaderProgram->bind();
+	pickShaderProgram->enableAttributeArray(0);
+	pickShaderProgram->setAttributeBuffer(0, GL_FLOAT, offsetof(NodeVertex, position), 3, sizeof(NodeVertex));
 }
 
 void OpenGLWindow::initResources()
@@ -1578,6 +1642,32 @@ void OpenGLWindow::initResources()
 		bindPointShaderProgram();
 	}
 
+	// 创建选择模式相关渲染资源
+	{
+		const int kMaxPickIndexNum = 100;
+		pickIndices.resize(kMaxPickIndexNum);
+		//pickIndices = { 0, 1 };
+		//pickVertices.resize(2);
+
+		pickVAO.create();
+		pickVAO.bind();
+		nodeVBO.bind();
+
+		//pickVBO = QOpenGLBuffer(QOpenGLBuffer::VertexBuffer);
+		//pickVBO.create();
+		//pickVBO.bind();
+		//pickVBO.setUsagePattern(QOpenGLBuffer::UsagePattern::DynamicDraw);
+		//pickVBO.allocate(pickVertices.constData(), pickVertices.count() * sizeof(NodeVertex));
+
+		// create the index buffer object
+		pickIBO = QOpenGLBuffer(QOpenGLBuffer::IndexBuffer);
+		pickIBO.create();
+		pickIBO.bind();
+		pickIBO.setUsagePattern(QOpenGLBuffer::DynamicDraw);
+		pickIBO.allocate(pickIndices.constData(), pickIndices.count() * sizeof(uint32_t));
+		bindPickShaderProgram();
+	}
+
 	// 创建obj模型相关渲染资源
 	{
 		objVAO.create();
@@ -1600,9 +1690,9 @@ void OpenGLWindow::initResources()
 
 void OpenGLWindow::cleanResources()
 {
+	Zone::facetID = 0;
 	nodeVertices.clear();
 	exteriorFacets.clear();
-	allFacets.clear();
 	mesh.clear();
 	objMesh.clear();
 	zones.clear();
@@ -1620,6 +1710,7 @@ void OpenGLWindow::cleanResources()
 	isosurfaceVertices.clear();
 	isosurfaceIndices.clear();
 	isolineVertices.clear();
+	pickIndices.clear();
 	objIndices.clear();
 
 	makeCurrent();
@@ -1637,6 +1728,8 @@ void OpenGLWindow::cleanResources()
 	sectionWireframeIBO.destroy();
 	isolineVAO.destroy();
 	isolineVBO.destroy();
+	pickVAO.destroy();
+	pickIBO.destroy();
 	objVAO.destroy();
 	objVBO.destroy();
 	objIBO.destroy();

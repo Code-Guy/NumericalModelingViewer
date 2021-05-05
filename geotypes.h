@@ -28,6 +28,24 @@ struct Plane
 	bool checkSide(const QVector3D& point) const;
 };
 
+struct Ray
+{
+	Ray(const QVector3D& origin, const QVector3D& direction) :
+		origin(origin), direction(direction.normalized())
+	{
+		invDirection = QVector3D(1.0f, 1.0f, 1.0f) / this->direction;
+		for (int i = 0; i < 3; ++i)
+		{
+			sign[i] = invDirection[i] < 0;
+		}
+	}
+
+	QVector3D origin;
+	QVector3D direction;
+	QVector3D invDirection;
+	int sign[3];
+};
+
 struct Bound
 {
 	QVector3D min = kMaxVec3;
@@ -43,6 +61,7 @@ struct Bound
 	void combine(const Bound& bound);
 	int maxDim();
 	bool intersect(const Plane& plane);
+	bool intersect(const Ray& ray);
 	bool contain(const QVector3D& point) const;
 	void cache();
 	void reset();
@@ -175,6 +194,21 @@ enum FacetType
 	Q4, T3
 };
 
+struct Facet
+{
+	FacetType type;
+	int elemID;
+	int facetID;
+	int num;
+	quint32 indices[4];
+
+	QSet<Edge> getEdges() const;
+	bool intersect(const QVector<NodeVertex>& nodeVertices, const Ray& ray, float& t) const;
+
+private:
+	bool intersect(const QVector<NodeVertex>& nodeVertices, quint32 i0, quint32 i1, quint32 i2, const Ray& ray, float& t) const;
+};
+
 struct Zone
 {
 	ZoneType type;
@@ -182,6 +216,8 @@ struct Zone
 	int edgeNum;
 	quint32 vertices[8];
 	quint32 edges[24];
+	QVector<Facet> facets;
+	static int facetID;
 
 	Bound bound;
 	bool visited = false;
@@ -190,19 +226,11 @@ struct Zone
 	QMatrix4x4 invertedBasisMatrix;
 	QVector<Plane> planes;
 	QVector3D origin;
+
 	bool isValid() const;
 	void cache(const QVector<NodeVertex>& nodeVertices);
 	bool contain(const QVector3D& point) const;
 	bool interp(const QVector3D& point, float& value) const;
-};
-
-struct Facet
-{
-	FacetType type;
-	int elemID;
-	int facetID;
-	int num;
-	quint32 indices[4];
 };
 
 struct UniformGrids

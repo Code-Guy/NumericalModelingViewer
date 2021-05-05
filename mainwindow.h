@@ -19,6 +19,7 @@ public:
 
 public slots:
 	void onDisplayModeComboBoxCurrentIndexChanged(int index);
+	void onPickModeComboBoxCurrentIndexChanged(int index);
 
 	void onPlaneOriginXLineEditTextChanged(const QString& text);
 	void onPlaneOriginYLineEditTextChanged(const QString& text);

@@ -20,6 +20,11 @@ enum DisplayMode
     ClipZone, Isosurface, Isoline
 };
 
+enum PickMode
+{
+	PickZone, PickFace, PickNone
+};
+
 class OpenGLWindow : public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
@@ -28,6 +33,8 @@ public:
     ~OpenGLWindow();
 
     void setDisplayMode(DisplayMode inDisplayMode);
+    void setPickMode(PickMode inPickMode);
+
     void setClipPlane(const Plane& inClipPlane);
     void setDisableClip(bool flag);
 	void setIsosurfaceValue(float inIsosurfaceValue);
@@ -73,13 +80,13 @@ private:
     void bindPointShaderProgram();
     void bindWireframeShaderProgram();
     void bindShadedShaderProgram();
+    void bindPickShaderProgram();
 
     void initResources();
     void cleanResources();
 
     QVector<NodeVertex> nodeVertices;
     QVector<Facet> exteriorFacets;
-    QVector<Facet> allFacets;
 
 	Mesh mesh;
 	Mesh objMesh;
@@ -93,6 +100,7 @@ private:
     QOpenGLShaderProgram* pointShaderProgram;
     QOpenGLShaderProgram* wireframeShaderProgram;
 	QOpenGLShaderProgram* shadedShaderProgram;
+	QOpenGLShaderProgram* pickShaderProgram;
 
     QOpenGLBuffer nodeVBO;
 
@@ -131,6 +139,12 @@ private:
 	QOpenGLVertexArrayObject isolineVAO;
 	QVector<NodeVertex> isolineVertices;
 
+    //QOpenGLBuffer pickVBO;
+	QOpenGLVertexArrayObject pickVAO;
+	QOpenGLBuffer pickIBO;
+    //QVector<NodeVertex> pickVertices;
+	QVector<uint32_t> pickIndices;
+
 	QOpenGLBuffer objVBO;
 	QOpenGLVertexArrayObject objVAO;
 	QVector<uint32_t> objIndices;
@@ -143,6 +157,8 @@ private:
     QElapsedTimer profileTimer;
 
     DisplayMode displayMode;
+    PickMode pickMode;
+
     Plane clipPlane;
     bool disableClip;
     float isosurfaceValue;

@@ -11,6 +11,7 @@ public:
 	static void cleanMesh(Mesh& mesh);
 	static void fixWindingOrder(Mesh& mesh);
 	static void clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* root, QVector<NodeVertex>& nodeVertices, QVector<NodeVertex>& sectionVertices, QVector<uint32_t>& sectionIndices, QVector<uint32_t>& sectionWireframeIndices);
+	static void pickZone(QVector<Zone>& zones, const Ray& ray, BVHTreeNode* root, const QVector<NodeVertex>& nodeVertices, QVector<uint32_t>& pickIndices, bool pickZoneMode = true);
 	static QVector<ClipLine> genIsolines(Mesh& mesh, QVector<NodeVertex>& nodeVertices, float value, BVHTreeNode* root);
 	static bool validateMesh(Mesh& mesh);
 	static bool interpZones(const QVector<Zone>& zones, BVHTreeNode* node, const QVector3D& point, float& value);
@@ -30,6 +31,7 @@ private:
 	static void resetZoneVisited(QVector<Zone>& zones);
 	static void resetBVHTree(BVHTreeNode* node);
 	static void clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* node, QVector<NodeVertex>& nodeVertices, QMap<Edge, uint32_t>& intersectionIndexMap, QVector<NodeVertex>& sectionVertices, QVector<uint32_t>& sectionIndices, QSet<Edge>& sectionWireframes);
+	static void pickZone(QVector<Zone>& zones, const Ray& ray, BVHTreeNode* node, const QVector<NodeVertex>& nodeVertices, QMap<float, QSet<Edge>>& pickEdgesMap, bool pickZoneMode);
 	static void findAllIsoEdges(Mesh& mesh, QVector<NodeVertex>& nodeVertices, float value, BVHTreeNode* node, QMap<Edge, QVector3D>& hits);
 	static void findIsoEdges(const Mesh& mesh, QVector<NodeVertex>& nodeVertices, const Face& face, float value, QMap<Edge, QVector3D>& hits);
 

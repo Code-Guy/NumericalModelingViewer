@@ -20,6 +20,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->exportAction, SIGNAL(triggered()), this, SLOT(exportToEDB()));
 
     connect(ui->displayModeComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onDisplayModeComboBoxCurrentIndexChanged(int)));
+    connect(ui->pickModeComboBox, SIGNAL(currentIndexChanged(int)), this, SLOT(onPickModeComboBoxCurrentIndexChanged(int)));
 
     connect(ui->planeOriginXLineEdit, SIGNAL(textChanged(const QString&)), this, SLOT(onPlaneOriginXLineEditTextChanged(const QString&)));
     connect(ui->planeOriginYLineEdit, SIGNAL(textChanged(const QString&)), this, SLOT(onPlaneOriginYLineEditTextChanged(const QString&)));
@@ -50,6 +51,11 @@ void MainWindow::onDisplayModeComboBoxCurrentIndexChanged(int index)
     setLayoutVisible(displayModeLayouts[index], true);
 
     ui->openGLWidget->setDisplayMode((DisplayMode)index);
+}
+
+void MainWindow::onPickModeComboBoxCurrentIndexChanged(int index)
+{
+    ui->openGLWidget->setPickMode((PickMode)index);
 }
 
 void MainWindow::onPlaneOriginXLineEditTextChanged(const QString& text)
@@ -87,7 +93,6 @@ void MainWindow::onPlaneNormalZLineEditTextChanged(const QString& text)
     clipPlane.normal[2] = text.toFloat();
 	ui->openGLWidget->setClipPlane(clipPlane);
 }
-
 
 void MainWindow::onDisableClipCheckBoxStateChanged(int state)
 {

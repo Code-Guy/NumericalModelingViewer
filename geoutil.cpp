@@ -200,6 +200,25 @@ void GeoUtil::clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* r
 	}
 }
 
+void GeoUtil::pickZone(QVector<Zone>& zones, const Ray& ray, BVHTreeNode* root, const QVector<NodeVertex>& nodeVertices, QVector<uint32_t>& pickIndices, bool pickZoneMode)
+{
+	resetZoneVisited(zones);
+	resetBVHTree(root);
+
+	pickIndices.clear();
+	QMap<float, QSet<Edge>> pickEdgesMap;
+
+	pickZone(zones, ray, root, nodeVertices, pickEdgesMap, pickZoneMode);
+
+	if (!pickEdgesMap.empty())
+	{
+		for (const auto& iter : pickEdgesMap.cbegin().value())
+		{
+			pickIndices.append({ iter.vertices[0], iter.vertices[1] });
+		}
+	}
+}
+
 QVector<ClipLine> GeoUtil::genIsolines(Mesh& mesh, QVector<NodeVertex>& nodeVertices, float value, BVHTreeNode* root)
 {
 	QVector<ClipLine> clipLines;
@@ -748,6 +767,73 @@ void GeoUtil::clipZones(QVector<Zone>& zones, const Plane& plane, BVHTreeNode* n
 		if (node->children[1]->bound.intersect(plane))
 		{
 			clipZones(zones, plane, node->children[1], nodeVertices, intersectionIndexMap, sectionVertices, sectionIndices, sectionWireframes);
+		}
+	}
+}
+
+void GeoUtil::pickZone(QVector<Zone>& zones, const Ray& ray, BVHTreeNode* node, const QVector<NodeVertex>& nodeVertices, QMap<float, QSet<Edge>>& pickEdgesMap, bool pickZoneMode)
+{
+	if (node->isLeaf)
+	{
+		for (uint32_t z : node->zones)
+		{
+			if (z == 56879)
+			{
+				int a = 0;
+			}
+
+			Zone& zone = zones[z];
+			if (!zone.visited)
+			{
+				zone.visited = true;
+
+				if (pickZoneMode)
+				{
+					for (const Facet& facet : zone.facets)
+					{
+						float t;
+						QSet<Edge> pickEdges;
+						if (facet.intersect(nodeVertices, ray, t))
+						{
+							float minT = 1e8f;
+							for (const Facet& f : zone.facets)
+							{
+								if (f.intersect(nodeVertices, ray, t))
+								{
+									minT = qMin(minT, t);
+								}
+								
+								pickEdges.unite(f.getEdges());
+							}
+
+							pickEdgesMap[minT] = pickEdges;
+							break;
+						}
+					}
+				}
+				else
+				{
+					for (const Facet& facet : zone.facets)
+					{
+						float t;
+						if (facet.intersect(nodeVertices, ray, t))
+						{
+							pickEdgesMap[t] = facet.getEdges();
+						}
+					}
+				}
+			}
+		}
+	}
+	else
+	{
+		if (node->children[0]->bound.intersect(ray))
+		{
+			pickZone(zones, ray, node->children[0], nodeVertices, pickEdgesMap, pickZoneMode);
+		}
+		if (node->children[1]->bound.intersect(ray))
+		{
+			pickZone(zones, ray, node->children[1], nodeVertices, pickEdgesMap, pickZoneMode);
 		}
 	}
 }

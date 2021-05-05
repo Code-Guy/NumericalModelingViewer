@@ -84,6 +84,36 @@ bool Bound::intersect(const Plane& plane)
 	return false;
 }
 
+bool Bound::intersect(const Ray& ray)
+{
+	QVector3D bounds[2] = { min, max };
+
+	float tmin, tmax, tymin, tymax, tzmin, tzmax;
+	tmin = (bounds[ray.sign[0]].x() - ray.origin.x()) * ray.invDirection.x();
+	tmax = (bounds[1 - ray.sign[0]].x() - ray.origin.x()) * ray.invDirection.x();
+	tymin = (bounds[ray.sign[1]].y() - ray.origin.y()) * ray.invDirection.y();
+	tymax = (bounds[1 - ray.sign[1]].y() - ray.origin.y()) * ray.invDirection.y();
+
+	if ((tmin > tymax) || (tymin > tmax))
+		return false;
+	if (tymin > tmin)
+		tmin = tymin;
+	if (tymax < tmax)
+		tmax = tymax;
+
+	tzmin = (bounds[ray.sign[2]].z() - ray.origin.z()) * ray.invDirection.z();
+	tzmax = (bounds[1 - ray.sign[2]].z() - ray.origin.z()) * ray.invDirection.z();
+
+	if ((tmin > tzmax) || (tzmin > tmax))
+		return false;
+	if (tzmin > tmin)
+		tmin = tzmin;
+	if (tzmax < tmax)
+		tmax = tzmax;
+
+	return true;
+}
+
 bool Bound::contain(const QVector3D& point) const
 {
 	return point[0] >= min[0] && point[0] <= max[0] &&
@@ -109,6 +139,7 @@ void Bound::reset()
 	intersectFlag = -1;
 }
 
+int Zone::facetID = 0;
 bool Zone::isValid() const
 {
 	QSet<uint32_t> vertexSet;
@@ -262,4 +293,59 @@ QVector3D qToVec3(const std::array<double, 3>& arr3)
 std::array<double, 3> qToArr3(const QVector3D& vec3)
 {
 	return std::array<double, 3>{vec3[0], vec3[1], vec3[2]};
+}
+
+QSet<Edge> Facet::getEdges() const
+{
+	if (type == T3)
+	{
+		return { {indices[0], indices[1]}, {indices[1], indices[2]}, {indices[2], indices[0]} };
+	}
+	else if (type == Q4)
+	{
+		return { {indices[0], indices[1]}, { indices[1], indices[2] }, { indices[2], indices[3]}, { indices[3], indices[0] } };
+	}
+	else
+	{
+		return {};
+	}
+}
+
+bool Facet::intersect(const QVector<NodeVertex>& nodeVertices, const Ray& ray, float& t) const
+{
+	if (intersect(nodeVertices, indices[0], indices[1], indices[2], ray, t))
+	{
+		return true;
+	}
+	if (type == Q4 && intersect(nodeVertices, indices[1], indices[2], indices[3], ray, t))
+	{
+		return true;
+	}
+	return false;
+}
+
+bool Facet::intersect(const QVector<NodeVertex>& nodeVertices, quint32 i0, quint32 i1, quint32 i2, const Ray& ray, float& t) const
+{
+	QVector3D v0v1 = nodeVertices[i1].position - nodeVertices[i0].position;
+	QVector3D v0v2 = nodeVertices[i2].position - nodeVertices[i0].position;
+	QVector3D pvec = QVector3D::crossProduct(ray.direction, v0v2);
+	float det = QVector3D::dotProduct(v0v1, pvec);
+
+	// ray and triangle are parallel if det is close to 0
+	if (fabs(det) < 0.00001f) return false;
+
+	float invDet = 1 / det;
+	float u, v;
+
+	QVector3D tvec = ray.origin - nodeVertices[i0].position;
+	u = QVector3D::dotProduct(tvec, pvec) * invDet;
+	const float kEpsilon = 0.0f;
+	if (u < -kEpsilon || u > 1.0f + kEpsilon) return false;
+
+	QVector3D qvec = QVector3D::crossProduct(tvec, v0v1);
+	v = QVector3D::dotProduct(ray.direction, qvec) * invDet;
+	if (v < -kEpsilon || u + v > 1.0f + kEpsilon) return false;
+
+	t = QVector3D::dotProduct(v0v2, qvec) * invDet;
+	return true;
 }
