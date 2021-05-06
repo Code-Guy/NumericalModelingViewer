@@ -2,7 +2,10 @@
 
 #include "geotypes.h"
 
-// 几何计算实用类
+/**
+	几何计算实用类
+*/
+
 class GeoUtil
 {
 public:

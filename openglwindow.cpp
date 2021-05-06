@@ -853,7 +853,7 @@ bool OpenGLWindow::printDatabase(const QString& fileName)
 	return true;
 }
 
-void OpenGLWindow::loadDataFiles(const QString& fileName)
+bool OpenGLWindow::loadDataFiles(const QString& fileName)
 {
 	// 加载模型网格数据
 	QString modelFileName = fileName;
@@ -946,6 +946,10 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 		}
 		modelFile.close();
 	}
+	else
+	{
+		return false;
+	}
 
 	// 加载三向（XYZ）位移数据数据
 	QString gridPointFileName = modelFileName.replace(fileInfo.fileName(), "gridpoint_result.txt");
@@ -970,6 +974,10 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 		}
 
 		gridFile.close();
+	}
+	else
+	{
+		return false;
 	}
 
 	// 加载应力数据
@@ -997,12 +1005,18 @@ void OpenGLWindow::loadDataFiles(const QString& fileName)
 
 		zoneResultFile.close();
 	}
+	else
+	{
+		return false;
+	}
 
 	// zone的缓存计算
 	for (Zone& zone : zones)
 	{
 		zone.cache(nodeVertices);
 	}
+
+	return true;
 }
 
 void OpenGLWindow::addFacet(Facet& facet)
