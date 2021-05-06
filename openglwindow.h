@@ -63,6 +63,23 @@ protected:
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
+    /** 导入edb格式的数据库文件
+
+		edb数据库文件包括8张表：
+            ELEMEDGES表：存储所有网格单元包含的线条信息，每个线条通过两个点索引表征；
+			ELEMENTS表：存储所有网格单元节点索引及空间坐标；
+			ELETYPE表：存储所有网格单元类型信息；
+			EXTERIOR表：存储模型所有外表面对应的节点索引信息；
+			FACETS表：存储模型所有表面对应的节点索引信息；
+			NODES表：存储节点索引及空间坐标；
+			RESULTS表：存储每个节点对应的计算结果值；
+			RSTTYPE表：存储计算结果类型、名称；
+        
+        本接口函数将数据库文件中存储的模型数据和数值计算数据导入到程序内部的Mesh数据结构中
+
+        @param fileName 数据库文件名
+        @return 返回是否导入成功
+    */
     bool loadDatabase(const QString& fileName);
     bool printDatabase(const QString& fileName);
 
