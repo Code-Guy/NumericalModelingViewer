@@ -898,7 +898,7 @@ bool OpenGLWindow::loadDataFiles(const QString& fileName)
 				else
 				{
 					qDebug() << "Unknown zone type: " << type;
-					return;
+					return false;
 				}
 
 				for (int i = 0; i < zone.vertexNum; ++i)
@@ -929,7 +929,7 @@ bool OpenGLWindow::loadDataFiles(const QString& fileName)
 				else
 				{
 					qDebug() << "Unknown face type: " << type;
-					return;
+					return false;
 				}
 
 				for (int i = 0; i < facet.num; ++i)

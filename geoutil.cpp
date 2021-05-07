@@ -777,11 +777,6 @@ void GeoUtil::pickZone(QVector<Zone>& zones, const Ray& ray, BVHTreeNode* node, 
 	{
 		for (uint32_t z : node->zones)
 		{
-			if (z == 56879)
-			{
-				int a = 0;
-			}
-
 			Zone& zone = zones[z];
 			if (!zone.visited)
 			{
